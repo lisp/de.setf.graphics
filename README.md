@@ -19,7 +19,7 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
 <tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th><th>X</th></tr>
 <tr><th>MCL</th>
     <td> </td>
-    <td>MCL-5.2, ![clx_0.4](./readmes/mcl-clx.tiff)</td>
+    <td>MCL-5.2, ![clx_0.4](http://github.com/lisp/de.setf.graphics/blob/master/readmes/ccl-clx.tiff)</td>
     <td>MCL-5.2, ![AGL-1.2.4](./readmes/mcl-opengl.tiff)</td></tr>
 <tr><th>CCL</th>
     <td/>
