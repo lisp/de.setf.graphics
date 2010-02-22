@@ -4,8 +4,8 @@ DE.SETF.GRAPHICS: a Common Lisp graphics library
 -------
 
 `de.setf.graphics` implements a native Common Lisp graphics kibrary.
-It provides 3d scene and geometry modeling and rendering in clos with
-rendering support for clx, quickdraw, clim, and opengl.
+It provides 3d scene and geometry modeling in CLOS with
+rendering support for clim, clx, opengl, quickdraw, and svg.
 
 
 
@@ -23,11 +23,11 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
     <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-opengl.png' width='64' height='64'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
+    <td>CCL-1.4, OS X 4.6, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
     <td> </td></tr>
 <tr><th>SBCL</th>
     <td/>
-    <td></td>
+    <td>SBCL-1-0-35, OS X 4.6, clx_0.7.4:<br/><a href='./readmes/sbcl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/sbcl-clx.png' width='64' height='64'/></a></td>
     <td></td></tr>
 </table>
 
