@@ -23,7 +23,7 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
     <td>MCL-5.2, ![AGL-1.2.4](./readmes/mcl-opengl.tiff)</td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.4, ![clx_0.7.3](./readmes/ccl-clx.tiff)</td>
+    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/ccl-clx.gif' width='96' height='96'/></a></td>
     <td> </td></tr>
 <tr><th>SBCL</th>
     <td/>
