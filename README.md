@@ -23,7 +23,7 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
     <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-opengl.png' width='64' height='64'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/cclclx.png' width='64' height='64'/></a></td>
+    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
     <td> </td></tr>
 <tr><th>SBCL</th>
     <td/>
