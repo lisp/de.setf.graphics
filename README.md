@@ -3,7 +3,7 @@
 DE.SETF.GRAPHICS: a Common Lisp graphics library
 -------
 
-`de.setf.amqp` implements a native Common Lisp graphics kibrary.
+`de.setf.graphics` implements a native Common Lisp graphics kibrary.
 It provides 3d scene and geometry modeling and rendering in clos with
 rendering support for clx, quickdraw, clim, and opengl.
 
@@ -16,11 +16,11 @@ This library has been used for research, development, and prototyping.
 Over the years, it has been built and [probed](./tests/tests.asd) in the following combinations
 
 <table>
-<tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th><th>X</th></tr>
+<tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th></tr>
 <tr><th>MCL</th>
     <td> </td>
-    <td>MCL-5.2, ![clx_0.4](http://github.com/lisp/de.setf.graphics/blob/master/readmes/ccl-clx.tiff)</td>
-    <td>MCL-5.2, ![AGL-1.2.4](./readmes/mcl-opengl.tiff)</td></tr>
+    <td>MCL-5.2, clx_0.4:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/mcl-clx.tiff' width='96' height='96'/></a></td>
+    <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/mcl-opengl.tiff' width='96' height='96'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
     <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/ccl-clx.gif' width='96' height='96'/></a></td>
@@ -85,6 +85,7 @@ in this combined form,  under the GAL as well
   - 1988, 1989 : Franz Inc
 
 This library has evolved over the years under various copyrights
+
 - Copyright 1988-1993 [james anderson](mailto:jaa@dtmg.mit.edu) (lgpl)
   - 19880616: the original version was written as part of a research program in
  design reasoning with the "design tools and methods group" in the
