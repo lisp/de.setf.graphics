@@ -19,11 +19,11 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
 <tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th></tr>
 <tr><th>MCL</th>
     <td> </td>
-    <td>MCL-5.2, clx_0.4:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/mcl-clx.tiff' width='96' height='96'/></a></td>
-    <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/mcl-opengl.tiff' width='96' height='96'/></a></td></tr>
+    <td>MCL-5.2, clx_0.4:<br/><a href='./readmes/mcl-clx.png'><img src='./readmes/mcl-clx.png' width='96' height='96'/></a></td>
+    <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='./readmes/mcl-opengl.png' width='96' height='96'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.gif'><img src='./readmes/ccl-clx.gif' width='96' height='96'/></a></td>
+    <td>CCL-1.4, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='./readmes/ccl-clx.png' width='96' height='96'/></a></td>
     <td> </td></tr>
 <tr><th>SBCL</th>
     <td/>
