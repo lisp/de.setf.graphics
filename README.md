@@ -44,7 +44,7 @@ Notes
   - [CLX](http://www.x.org/wiki/) arc angles are degrees, view rotation is computed in radians. [@xfree](http://www.xfree86.org/current/XArc.3.html)
   - [Java 3D] [rotations](http://java.sun.com/javase/technologies/desktop/java3d/forDevelopers/J3D_1_3_API/j3dapi/index.html) are radians
   - [OpenGL](http://www.opengl.org/sdk/docs/man/xhtml/glRotate.xml) degrees
-  - SVG : [transforms](http://www.w3.org/TR/SVG/coords.htm are degrees, 
+  - SVG : [transforms](http://www.w3.org/TR/SVG/coords.htm) are degrees, 
 
 No one of them is preeminent. The internal transformation operators are implemented in radians and converted as required as arguments to
 library functions. It would be possible to apply internalization/externailzation operators intrface arguments, but since the interface
