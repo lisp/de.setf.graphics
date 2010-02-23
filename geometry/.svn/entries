@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wc-entries
+   xmlns="svn:">
+<entry
+   committed-rev="1"
+   name=""
+   committed-date="2006-08-09T18:47:39.806190Z"
+   url="file:///Volumes/yoda-ext-fw/Development/Source/Repository/svnroot/dev/Library/trunk/de/setf/object-graphics/code/geometry"
+   last-author="janson"
+   kind="dir"
+   uuid="5c69cada-db8f-48ca-8610-988f9f4d2d05"
+   repos="file:///Volumes/yoda-ext-fw/Development/Source/Repository/svnroot/dev/Library"
+   revision="1"/>
+<entry
+   committed-rev="10"
+   name="locations.lisp"
+   text-time="2006-10-15T20:45:12.000000Z"
+   committed-date="2006-10-15T23:37:57.704374Z"
+   checksum="e3a6455eb77b3322335311ad500bc84d"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"
+   revision="10"/>
+<entry
+   committed-rev="3"
+   name="transform-context.lisp"
+   text-time="2006-09-28T04:58:33.000000Z"
+   committed-date="2006-09-28T05:45:19.448128Z"
+   checksum="b0565e17c09cc3801cd963158db4802a"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"
+   revision="3"/>
+<entry
+   committed-rev="1"
+   name="lisp-serializer.lisp"
+   text-time="2006-08-09T21:18:02.000000Z"
+   committed-date="2006-08-09T18:47:39.806190Z"
+   checksum="c57729fa366844a8cde0b50bc6e652cb"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"/>
+<entry
+   committed-rev="1"
+   name="location-math.lisp"
+   text-time="2006-08-09T21:18:02.000000Z"
+   committed-date="2006-08-09T18:47:39.806190Z"
+   checksum="0bf7ab91d8b17b67e7821cebecefbeb6"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"/>
+<entry
+   committed-rev="1"
+   name="location-transform.lisp"
+   text-time="2006-08-09T21:18:02.000000Z"
+   committed-date="2006-08-09T18:47:39.806190Z"
+   checksum="19b6ba48c794b5687b7bd9d6bd765d0a"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"/>
+<entry
+   committed-rev="1"
+   name="matrix.lisp"
+   text-time="2006-08-09T21:18:02.000000Z"
+   committed-date="2006-08-09T18:47:39.806190Z"
+   checksum="3de2574a35843ec908234bcbfd958adc"
+   last-author="janson"
+   kind="file"
+   prop-time="2006-08-09T21:18:02.000000Z"/>
+</wc-entries>
