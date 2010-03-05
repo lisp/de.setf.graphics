@@ -31,7 +31,8 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
     <td></td></tr>
 </table>
 
-
+The documentation is, unfortunately, to be found in the form of files intended for Word for Macintosh, Version 4.0, only.
+Until that improves, consult the [tests](./tests/) for examples.
 
 Notes
 -----
@@ -80,9 +81,14 @@ in this combined form,  under the GAL as well
   - 2005 [Alexander Repenning](mailto:ralex@cs.colorado.edu)
 - closer-mop :  MIT-style
   - 2005 - 2010 [Pascal Costanza](http://p-cos.net)
-- clx : TI; additional attributions undated
+- clx : TI; additional attributions undated (consult the (external.lisp)[./clx/ecternal.lisp] for the reference to the
+  exact version
   - 1987 : Texas Instruments
   - 1988, 1989 : Franz Inc
+- meta : anon
+  - 2002 [Jochen Schmidt](jsc@dataheaven.de)
+- skippy : public domain
+  - 2005 [Zach Beane](xach@xach.com)
 
 This library has evolved over the years under various copyrights
 

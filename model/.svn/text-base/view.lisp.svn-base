@@ -1,0 +1,139 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+#|
+<DOCUMENTATION>
+ <title>view</title>
+ <DESCRIPTION>
+  definition for the view model classes
+  </DESCRIPTION>
+ <CHRONOLOGY>
+  <DELTA DATE='19880616' AUTHOR='jaa@dtmg' />
+  <DELTA DATE='19891115' AUTHOR='jaa@dtmg' >ported to clx/pcl</DELTA>
+  <DELTA DATE='20030903' AUTHOR='jaa@setf.de' >distinguised view constituents and expressed them in terms of scene model</DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION>
+|#
+
+;;;; --------------------------------------------------------------------------
+(in-package :de.setf.object-graphics.implementation)
+
+(defVar *default.view-projection-angle* 0.0d0)
+(defVar *default.view-projection-near-plane* 0.01d0)
+(defVar *default.view-projection-projection* :orthographic)
+(defVar *default.view-station-center* (make-location-world :x 0.0d0 :y 0.0d0 :z 0.0d0))
+(defVar *default.view-station-normal* (make-location-world :x 0.0d0 :y 0.0d0 :z 1.0d0))
+(defVar *default.view-station-reference* (make-location-world :x 0.0d0 :y 0.0d0 :z 0.0d0))
+(defVar *default.view-station-station* (make-location-world :x 0.0d0 :y 0.0d0 :z 50.0d0))
+(defVar *default.view-station-up* (make-location-world :x 0.0d0 :y 1.0d0 :z 0.0d0))
+(defVar *default.view-projection-minimum* +most-negative-location-world+)
+(defVar *default.view-projection-maximum* +most-positive-location-world+)
+(defVar *default.view-port-drawable-center* (make-location-2 :x 0.0d0 :y 0.0d0))
+(defVar *default.view-port-scale* :fixed)
+
+;;;; --------------------------------------------------------------------------
+
+(defClass view-constituent (child)
+  ())
+
+(defClass view-station (view-constituent)
+  ((center
+    :initform (copy-location *default.view-station-center*) :initarg :center
+    :accessor view-center
+    :documentation
+    "the location to look-at in world locations")
+   (station
+    :initform (copy-location *default.view-station-station*) :initarg :station
+    :accessor view-station
+    :documentation
+    "the location to look from in world locations")
+   (normal
+    :initform (copy-location *default.view-station-normal*) :initarg :normal
+    ;accessor view-normal
+    :documentation
+    "a vector (ie a normalized world location) from center to station.")
+   (up
+    :initform (copy-location *default.view-station-up*) :initarg :up
+    :accessor view-up
+    :documentation
+    "a vector (ie a normalized world location) pointing up.")
+   (reference
+    :initform (copy-location *default.view-station-reference*) :initarg :reference
+    :accessor view-reference
+    :documentation
+    "a reference point on projection plane.")
+   (distance
+    :initform (location-magnitude (location-- *default.view-station-station* *default.view-station-center*)) :initarg :distance
+    :accessor view-distance
+    :documentation
+    "the distance from center to station cached"))
+  (:documentation
+   "a view-station binds the view location properties."))
+
+(defClass view-projection (view-constituent)
+  ((projection
+    :initform *default.view-projection-projection* :initarg :prejection
+    :accessor view-projection :type (member :orthographic :perspective)
+    :documentation
+    "the type of projection. one of :orthographic, :perspective.")
+    (angle
+    :initform *default.view-projection-angle* :initarg :angle
+    :accessor view-angle
+    :documentation
+    "the angle of view")
+   (near-plane
+    :initform *default.view-projection-near-plane* :initarg :near-plane 
+    :accessor view-near-place
+    :documentation
+    "the distance from the station to the near clip plane.")
+   (far-plane
+    :initform (* 2.0d0 (location-magnitude (location-- *default.view-station-station* *default.view-station-center*))) :initarg :far-plane
+    :accessor view-far-plane
+    :documentation
+    "the distance from the station to the far clip plane. the initial value is twice the default view-station distance ")
+   (minimum
+    :initform *default.view-projection-minimum* :initarg :minimum
+    :accessor view-minimum
+    :documentation
+    "the minimum value in the view box for orthographic projections.")
+   (maximum
+    :initform *default.view-projection-maximum* :initarg :maximum
+    :accessor view-maximum
+    :documentation
+    "the minimum value in the view box for orthographic projections."))
+  (:documentation
+   "binds the view perspective projection properties"))
+
+(defClass view-port (view-constituent)
+  ((drawable-center
+    :initform *default.view-port-drawable-center* :initarg :drawable-center
+    :accessor view-drawable-center
+    :documentation
+    "(Cu, Cv)")
+   (drawable-halfsize
+    :documentation "half the drawable reslution")
+   (drawable-resolution
+    :initarg :drawable-resolution
+    :accessor view-drawable-resolution
+    :documentation
+    "the drawable resolution in pixels. if not specified, it defaults to the given drawable's size")
+   (scale
+    :initform *default.view-port-scale* :initarg :scale-mode
+    :accessor view-scale-mode :type (member :fixed :isotropic :anisotropic)
+    :documentation
+    "specifies whether the view projection should scale the projection with changes in port size and if so whether the aspect ration is perserved.")))
+
+
+(defClass view-parameters (view-station view-projection view-port)
+  ())
+
+(defClassInterfaces
+  :defaults (:predicate t)
+  view-station
+  view-projection
+  view-port
+  view-parameters
+  )
+
+
+;;;; --------------------------------------------------------------------------
+:eof

@@ -1,0 +1,145 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+<DOCUMENTATION>
+ <title>concrete model geometric constituents</title>
+ <DESCRIPTION>
+  definition for the geometric constituent classes classes:
+  <ul><li>line</li><li>polyline</li><li>quadrangle</li><li>rectangle</li>
+      <li>triangle</li><li>sphere</li><li>circle</li>
+      </ul>
+  </DESCRIPTION>
+ <CHRONOLOGY>
+  <DELTA DATE='19880616' AUTHOR='jaa@dtmg' />
+  <DELTA DATE='19891108' AUTHOR='jaa@dtmg' >ported to clx/pcl</DELTA>
+  <DELTA DATE='20030901' AUTHOR='james.anderson@setf.de' >scene graph model</DELTA>
+  <DELTA DATE='20051007' AUTHOR='janderson@ravenpac.com' >added start-location, end-location</DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION>
+
+
+(in-package :de.setf.object-graphics.implementation)
+
+
+(defClass line (located dyad)
+  ((m-value
+    :accessor start-location)
+   (d-value
+    :initform (make-location :x 0.0d0 :y 0.0d0 :z 0.0d0)
+    :initarg :end 
+    :accessor end :accessor end-location)))
+
+(defClass polyline (located polyad)
+  ((p-value :accessor locations)))
+
+(defClass quadrilateral (geometric-element)
+  ()
+  (:documentation
+   "a quadilateral is the abstract generalization of four-sided figures. is it specialized as either a rectangle, that is with right angles, or as a quadrangle."))
+
+(defClass quadrangle (quadilateral)
+  ())
+
+(defClass rectangle (quadilateral)
+  ()
+  (:documentation
+   "a rectangle is a quadrilateral with right angles. the extremes are bound as location and end."))
+
+(defClass triangle (triad)
+  ())
+
+(defClass circle (dyad)
+  ((d-value
+    :initform 0.0d0 :initarg :radius :initarg radius
+    :accessor radius
+    :documentation
+    "the circle radius")))
+
+;;;
+;;;
+
+(defMethod shared-initialize :after ((instance rectangle) (slots t) &rest initargs)
+  (with-slots (locations location end) instance
+    (when (or (eq slots t) (find 'location slots))
+      (setf location (first locations)))
+    (when (or (eq slots t) (find 'end slots))
+      (setf end (third locations)))
+    (when (or (eq slots t) (find 'locations slots))
+      (unless (and location end)
+        (error "requires location and end: ~s." initargs))
+      (cond ((= (location-x location) (location-x end))
+             (setf locations (list location
+                                   (make-location-world :x (location-x location)
+                                                          :y (location-y location)
+                                                          :z (location-z end))
+                                   end
+                                   (make-location-world :x (location-x location)
+                                                          :y (location-y end)
+                                                          :z (location-z location)))))
+            ((= (location-y location) (location-y end))
+             (setf locations (list location
+                                   (make-location-world :x (location-x end)
+                                                          :y (location-y location)
+                                                          :z (location-z location))
+                                   end
+                                   (make-location-world :x (location-x location)
+                                                          :y (location-y location)
+                                                          :z (location-z end)))))
+            ((= (location-z location) (location-z end))
+             (setf locations (list location
+                                   (make-location-world :x (location-x end)
+                                                          :y (location-y location)
+                                                          :z (location-z location))
+                                   end
+                                   (make-location-world :x (location-x location)
+                                                          :y (location-y end)
+                                                          :z (location-z location)))))
+            (t
+             (error "non-planar locations: ~s, ~s" location end))))))
+
+(defMethod shared-initialize ((instance polyline) (slots t)
+                              &key locations
+                              &allow-other-keys)
+  "when initializing a polyline maintain the constraint, that location is the first, and end is the last point in the locations."
+  (with-slots (m-value d-value) instance
+    (when locations
+      (unless m-value (setf m-value (first locations)))
+      (unless d-value (setf d-value (first (last locations)))))
+    (call-next-method)
+    (unless locations
+      (when (or (eq slots t) (find 'm-value slots))
+        (setf m-value (first (locations instance))))
+      (when (or (eq slots t) (find 'd-value slots))
+        (setf d-value (first (last (locations instance))))))))
+
+
+;;;
+;;;
+
+(defClassInterfaces
+  line
+  quadrangle
+  quadrilateral
+  polyline
+  rectangle
+  triangle
+  )
+
+
+;;;
+;;;
+
+
+(defmethod print-object ((instance rectangle) stream)
+  (print-unreadable-object (instance stream :type t :identity t)
+    (format stream "~s ~s" (location instance) (locations instance))))
+
+
+(defGeneric sample-projection (raster projection-context)
+  (:documentation
+   "compute the representation of the raster sample data for the given context."))
+
+
+
+
+
+:eof

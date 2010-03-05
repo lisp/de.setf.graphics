@@ -2,7 +2,8 @@
 
 (in-package :de.setf.graphics.implementation)
 
-(document "definitions for location classes for the 'de.setf.graphics' library."
+(document "This file defines location classes for the 'de.setf.graphics' library."
+
   (copyright "Copyright 2010 [james anderson](mailto:james.anderson@setf.de) All Rights Reserved"
              "'de.setf.graphics' is free software: you can redistribute it and/or modify it under the terms of version 3
   of the GNU Affero General Public License as published by the Free Software Foundation.
@@ -1273,7 +1274,7 @@ variables are bound to respective coordiante values."
         (etypecase location
           (array
            (ecase (array-element-type location)
-             ((single-float long-float double-float)
+             ((short-float long-float double-float)
               (locally (declare (type location-vector location))
                 (setf tmp-double (aref location 0)) ;; (return-from %copy-location-to-short-coordinates nil)
                 (ccl::%set-ieee-single-float-from-double tmp-double %tmp-single-coordinate)

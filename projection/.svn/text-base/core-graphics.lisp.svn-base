@@ -1,0 +1,1123 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+
+<DOCUMENTATION>
+ <title>apple core graphics, quartz, the abstract graphics implementation</title>
+ <DESCRIPTION>
+  <p>
+  this file implements the abstract operations for the core-graphics library, also known as quartz.
+  the implementation depends on a an interface to the core foundation libraries which is defined in the files for a coregraphics <a href='../interfaces/CGContext-mach-o.lisp'>GCContext</a> or for the geometry <a href='../interfaces/CGGeometry-mach-o.lisp'>components</a>.</p>
+  <p>
+  the functions exhibit several forms:
+ <dl><dt>context-<i>operation</i></dt><dd>include in intial specializer. they are invoked from interface functions to perform operations for the given context.</dd>
+     <dt>core-graphics-<i>operation</i></dt><dd>require an initial cgcontextref pointer</dd>
+     <dt>cg-<i>operation</i></dt><dd>are internal functions and utilities which are specific to core-graphics but do not depend on the context.</dd>
+     <dt>context-<i>operation</i></dt><dd>require a coregraphics context and implement components things like ndc-specific methods</dd>
+     </dl></p>
+  </DESCRIPTION>
+ <CHRONOLOGY>
+  <DELTA DATE='20030911' AUTHOR='james.anderson@setf.de' >
+   </DELTA>
+  <DELTA DATE='20060425' AUTHOR='janderson@ravenpack.com'>clear disposed macptr values</DELTA>
+  <DELTA DATE='20060612' AUTHOR='janderson@ravenpack.com'>5.1 type indicators in traps</DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION> 
+
+(pushnew :og.assert-types *features*)
+
+(in-package :de.setf.object-graphics.implementation)
+
+(defParameter *cgcontextref* nil)
+(defparameter *core-graphics-view* nil)
+(defparameter *core-graphics-pattern* ccl:*light-gray-pattern*)
+(defParameter *core-graphics-raster-operation* :srcCopy)
+
+
+(defparameter *core-graphics-path-effect* :stroke
+  "the abstract path mode designator")
+(defParameter *core-graphics-path-drawing-mode-value* #$kCGPathStroke
+  "the core graphics path drawing mode value")
+(defParameter *core-graphics-fill-color* (short-location-vector))
+(defParameter *core-graphics-stroke-color* (short-location-vector))
+(defParameter *core-graphics-stroke-width* 1.0s0)
+(defParameter *core-graphics-background-color* (short-location-vector))
+(defParameter *core-graphics-color-mode* :source)
+(defParameter *core-graphics-color-alpha-factor* 1.0s0)
+(defParameter *core-graphics-font* '("monaco" 10))
+
+(declaim (type short-location-vector *core-graphics-stroke-color* *core-graphics-fill-color* *core-graphics-background-color*))
+
+(defParameter *core-graphics-path-level* 0)
+(defParameter *core-graphics-arc-orientation* 0)
+(defParameter *core-graphics-path-drawing-mode-map*
+  `((:erase . ,#$kCGPathFill)
+    (:fill . ,#$kCGPathFill)            ; treated as fill with temporary background as fill
+    (:invert  . ,#$kCGPathFill)
+    (:point  . ,#$kCGPathStroke)        ; treated as stroke
+    (:eofill . ,#$kCGPathEOFill)
+    (:stroke . ,#$kCGPathStroke)
+    (:lines . ,#$kCGPathStroke)
+    (:stroke . ,#$kCGPathStroke)
+    (:fill-stroke . ,#$kCGPathFillStroke)
+    (:eofill-stroke . ,#$kCGPathEOFillStroke)))
+
+
+
+(ccl:defRecord vector-short.4
+  (:_0 :single-float)
+  (:_1 :single-float)
+  (:_2 :single-float)
+  (:_3 :single-float))
+
+(ccl:defRecord short-matrix_3x2
+  (:_00 :single-float)
+  (:_01 :single-float)
+  (:_10 :single-float)
+  (:_11 :single-float)
+  (:_20 :single-float)
+  (:_21 :single-float))
+
+(defun cg-path-drawing-mode (mode)
+  (or (rest (assoc mode *core-graphics-path-drawing-mode-map*))
+      (error "invalid path drawing mode: ~s." mode)))
+
+
+(defun cgcontextref-p (x)
+  "verify that the value is the currently active core grafics context reference."
+  (and (macptrp x) (eq x *cgcontextref*)))
+(deftype cgcontextref () '(satisfies cgcontextref-p))
+
+;;; definitions for in-line operations
+;;; nb. the compiler must have a go at the macros before it does the functions,
+;;; otherwise the existing trap macros as observed and point to non-existent library entries.
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  ;; avoid spurious unresolved reference warnings
+  #+mach-o-traps
+  (progn
+    (ccl::mach-o-entry 'traps::_CGPointMake "CGPointMake" "ApplicationServices.framework"
+                       :if-exists :delete :if-does-not-exist nil)
+    (ccl::mach-o-entry 'traps::_CGSizeMake "CGSizeMake" "ApplicationServices.framework"
+                       :if-exists :delete :if-does-not-exist nil)
+    (ccl::mach-o-entry 'traps::_CGRectMake "CGRectMake" "ApplicationServices.framework"
+                       :if-exists :delete :if-does-not-exist nil))
+  ;; redefine the trap macros
+  (let ((ccl:*warn-if-redefine* nil))
+    (defMacro traps::_CGPointMake (x y)
+      `(make-record :CGPoint :x (float ,x 1.0s0) :y (float ,y 1.0s0)))
+    (defMacro traps::_CGSizeMake (w h)
+      `(make-record :CGSize :width (float ,w 1.0s0) :height (float ,h 1.0s0)))
+    (defMacro traps::_CGRectMake (x y w h)
+      `(make-record :CGRect
+                    :origin.x (float ,x 1.0s0) :origin.y (float ,y 1.0s0)
+                    :size.width (float ,w 1.0s0) :size.height (float ,h 1.0s0)))
+    ))
+
+;; redefine the functions
+(let ((*warn-if-redefine* nil))
+  (defun traps::CGSizeMake (x y)
+    (traps::_CGSizeMake x y))
+  (defun traps::CGSizeMake (x y)
+    (traps::_CGSizeMake x y))
+  (defun traps::CGRectMake (x y w h)
+    (traps::_CGRectMake x y w h))
+  )
+       
+
+
+#|
+(defun test-w-s-l-c (location)
+  (with-short-location-coordinates ((location x y z h))
+    (= x y z h)))
+
+(with-short-location-vectors ((l1 0.0s0 1.0s0 2.0s0 3.0s0))
+  (time (test-w-s-l-c l1)))
+
+(with-location-vectors ((l1 10.0 11.0 12.0 (- 13.0 13.0)))
+  (time (test-w-s-l-c l1)))
+
+|#
+
+
+;;;
+;;; class
+
+(defClass core-graphics-context (ndc-transform-context view-context projection-context)
+  ((arc-ndc :initform 'core-graphics-arc-ndc :allocation :instance)
+   (line-ndc :initform 'core-graphics-line-ndc :allocation :instance)
+   (raster-ndc :initform 'core-graphics-raster-ndc :allocation :instance)
+   (rectangle-ndc :initform 'core-graphics-rectangle-ndc :allocation :instance)
+   (text-ndc :initform 'core-graphics-text-ndc :allocation :instance)
+   (%cgcontextref
+    :initform nil :reader context-ndc-context
+    :documentation
+    "bound to a core graphcs context reference within a with-cgcontext form.
+     the value is available between the QDBeginCGContext/QDEndCGContext calls only."))
+  (:documentation
+   "the context for core-graphics operations"))
+
+
+(defmacro with-cgcontext ((cgcontextref core-graphics-context) &body body)
+  (let ((&%cgcontextref  (gensym))
+        (port (gensym))
+        (err (gensym))
+        (c-g-context-var (gensym)))
+    `(rlet ((,&%cgcontextref :pointer))
+       (let* ((,c-g-context-var ,core-graphics-context)
+              (,port (#_GetWindowPort (wptr (context-view ,c-g-context-var))))
+              (,err (#_QDBeginCGContext ,port ,&%cgcontextref)))
+         (cond ((zerop ,err)
+                (unwind-protect
+                  (with-macptrs ((,cgcontextref (%get-ptr ,&%cgcontextref)))
+                    (setf (slot-value ,c-g-context-var '%cgcontextref) ,cgcontextref)
+                    ,@body)
+                  (setf (slot-value ,c-g-context-var '%cgcontextref) nil)
+                  (unless (and (macptrp ,&%cgcontextref)
+                               (macptrp ,port))
+                    (error "can't end core graphics context"))
+                  (#_QDEndCGContext ,port ,&%cgcontextref)))
+               (t
+                (warn "can't get context: ~d." ,err)))))))
+
+(defmacro with-cgrect ((name &key left top width height origin size) &rest body)
+  `(rlet ((,name :cgrect))
+     ,(if left
+        `(setf (rref ,name cgrect.origin.x) (if (typep ,left 'short-float) ,left (coerce ,left 'short-float))
+               (rref ,name cgrect.origin.y) (if (typep ,top 'short-float) ,top (coerce ,top 'short-float)))
+        `(setf (rref ,name cgrect.origin) ,origin))
+     ,(if width
+        `(setf (rref ,name cgrect.size.width) (if (typep ,width 'short-float) ,width (coerce ,width 'short-float))
+               (rref ,name cgrect.size.height) (if (typep ,height 'short-float) ,height (coerce ,height 'short-float)))
+        `(setf (rref ,name cgrect.size) ,size))
+     ,@body))
+
+(defmacro with-cg-fill-color (color &rest body)
+  (let ((function (gensym)))
+    `(flet ((,function () ,@body))
+       (declare (dynamic-extent #',function))
+       (cg-call-with-fill-color #',function ,color))))
+
+(defmethod context-view-p ((context core-graphics-context) (view view))
+  (when (ccl:wptr view) t))
+
+
+;;;
+;;; context binding
+
+(defMethod call-with-projection-context
+           ((function function) (context core-graphics-context)
+                     &key
+                     &allow-other-keys)
+  (let ((view (context-view context))
+        (*core-graphics-fill-color* (short-location-vector))
+        (*core-graphics-stroke-color* (short-location-vector))
+        (*core-graphics-background-color* (short-location-vector)))
+    (rlet ((forecolor :rgbcolor)
+           (backcolor :rgbcolor))
+      (with-macptrs ((qd-port (#_getwindowport (wptr view))))
+        (#_getportforecolor qd-port forecolor)
+        (#_getportbackcolor qd-port backcolor))
+      (with-cgcontext (*cgcontextref* context)
+        (core-graphics-fill-color*4 *cgcontextref*
+                                    (rref forecolor :rgbcolor.red) (rref forecolor :rgbcolor.green) (rref forecolor :rgbcolor.blue))
+        (core-graphics-stroke-color*4 *cgcontextref*
+                                      (rref forecolor :rgbcolor.red) (rref forecolor :rgbcolor.green) (rref forecolor :rgbcolor.blue))
+        (core-graphics-background-color*4 *cgcontextref*
+                                          (rref backcolor :rgbcolor.red) (rref backcolor :rgbcolor.green) (rref backcolor :rgbcolor.blue))
+        (prog1 (call-next-method)
+          (#_CGContextFlush *cgcontextref*))))))
+
+
+(defMethod define-font ((context core-graphics-context) font-spec name)
+  (multiple-value-bind (family point-size)
+                       (compute-font-parameters font-spec)
+    (setf (get-font context name) (list family point-size)))
+  name)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+
+;;; 
+;;; geometric elements
+;;;
+;;; these functions draw the basic geometric figures.
+;;; NB: they do not take structure objects, rather they require the explicit
+;;; points - either as instances or as spread coordinates. all locations are absolute.
+;;; the instance
+
+(defun cg-inflect-geometry (geometry-operator)
+  (if *context-drawing-mode*
+    (let* ((path-constituents nil)
+           (path-effect nil)
+           (path-rule nil)
+           (path-agent nil)
+           (modifications #x1000))
+      (flet ((do-call ()
+               (funcall geometry-operator
+                        (if path-agent path-agent
+                            (if (eq path-effect :erase) *core-graphics-background-color*
+                                (if (eq path-constituents :surfaces)
+                                  *core-graphics-fill-color*
+                                  *core-graphics-stroke-color*)))
+                        (if path-constituents path-constituents *context-path-constituents*)
+                        (if path-effect path-effect *context-path-effect*)
+                        (if path-rule path-rule *context-path-rule*))
+               (setf modifications 0)))
+        (flet ((assert-property (property)
+                 (case property
+                   ;; rendering effects
+                   ((:surfaces :lines :points)
+                    (unless (eq path-constituents property)
+                      (unless (zerop (logand modifications #x100)) (do-call))
+                      (setf modifications (logior modifications #x100)
+                            path-constituents property)))
+                   ((:erase :invert :paint)
+                    (unless (eq path-effect property)
+                      (unless (zerop (logand modifications #x01)) (do-call))
+                      (setf modifications (logior modifications #x001)
+                            path-effect property)))
+                   ((:winding :even-odd)
+                    (unless (eq path-rule property)
+                      (setf modifications (logior modifications #x010)
+                            path-rule property)))
+                   ((nil)
+                    (do-call))
+                   (t (setf path-agent (etypecase property
+                                         (vector property)
+                                         (location-rgba property)
+                                         (ccl:macptr property)
+                                         (raster (context-raster-pixpat *projection-context* property))))))))
+          (etypecase *context-drawing-mode*
+            (cons (dolist (property *context-drawing-mode*) (assert-property property)))
+            (vector (dotimes (i (length *context-drawing-mode*))
+                      (assert-property (aref *context-drawing-mode* i))))
+            (null )
+            (keyword (assert-property *context-drawing-mode*)))
+          (unless (zerop modifications) (do-call)))))
+    ;; w/o local inflections
+    (funcall geometry-operator
+             (if (eq *context-path-effect* :erase)
+               *context-clear-agent*
+                 (if (eq *context-path-constituents* :surfaces)
+                   *context-fill-agent*
+                   *context-stroke-agent*))
+             *context-path-constituents*
+             *context-path-effect*
+             *context-path-rule*)))
+
+
+;;;
+;;; line
+
+(defun core-graphics-line-ndc (cgcontextref l1 l2 properties)
+  "draw a line given the ndc endpoints"
+  (declare (type location-vector l1 l2))
+  #+og.assert-types (progn (assert-type cgcontextref cgcontextref)
+                           (assert-types (l1 l2) location-vector)
+                           (assert-type properties sequence))
+  (with-short-location-coordinates ((l1 x1 y1) (l2 x2 y2))
+    (#_CGContextBeginPath cgcontextref)
+    (#_CGContextMoveToPoint cgcontextref x1 y1)
+    (#_CGContextAddLineToPoint cgcontextref x2 y2)
+    ;; don't close a line (#_CGContextClosePath cgcontextref)
+    (flet ((line-geometry ()
+             (#_CGContextDrawPath cgcontextref *core-graphics-path-drawing-mode-value*)))
+      (declare (dynamic-extent #'line-geometry))
+      (call-with-projection-variables #'line-geometry properties))))
+
+
+;;;
+;;; rectangle
+
+(defun core-graphics-rectangle-ndc (cgcontextref l1 l2 l3 l4 properties)
+  "draw a rectangle given the corners"
+  (declare (type location-vector l1 l2 l3 l4))
+  #+og.assert-types (progn (assert-type cgcontextref cgcontextref)
+                           (assert-types (l1 l2 l3 l4) location-vector)
+                           (assert-type properties sequence))
+  (with-short-location-coordinates ((l1 x1 y1) (l2 x2 y2)
+                                    (l3 x3 y3) (l4 x4 y4))
+    
+    ;; allow for erase, point, invert
+    (#_CGContextBeginPath cgcontextref)
+    (#_CGContextMoveToPoint cgcontextref x1 y1)
+    (#_CGContextAddLineToPoint cgcontextref x2 y2)
+    (#_CGContextAddLineToPoint cgcontextref x3 y3)
+    (#_CGContextAddLineToPoint cgcontextref x4 y4)
+    (#_CGContextClosePath cgcontextref)
+    (flet ((rectangle-geometry ()
+             (if (eq *core-graphics-path-effect* :erase)
+               ;; given a negative alpha value, use clearrect, which should make it transparent
+               (if (< (aref *core-graphics-background-color* 3) 0.0s0)
+                 (with-cgrect (%rect :left x1 :top y1 :width (- x3 x1) :height (- y3 y1))
+                   (#_CGContextClearRect cgcontextref :cgrect %rect))
+                 (with-cg-fill-color *core-graphics-background-color*
+                   (let ((*core-graphics-path-effect* :fill)
+                         (*core-graphics-path-drawing-mode-value* #$kCGPathFill))
+                     (#_CGContextDrawPath cgcontextref *core-graphics-path-drawing-mode-value*))))
+               (#_CGContextDrawPath cgcontextref *core-graphics-path-drawing-mode-value*))))
+      (declare (dynamic-extent #'rectangle-geometry))
+      (call-with-projection-variables #'rectangle-geometry properties))))
+
+
+
+;;
+;; polygon
+
+(defMethod context-poly ((context core-graphics-context) (locations sequence) &optional aspects)
+  "transform a sequence of points to ndc coordinates and render a polygon.
+   iff a location is a location-ndc, then the coordinates are not transformed"
+  #+og.assert-types (progn (assert-type *cgcontextref* macptr)
+                           (assert-types (locations aspects) sequence))
+  (if (eq *core-graphics-path-effect* :erase)
+    (with-cg-fill-color *core-graphics-background-color*
+      (let ((*core-graphics-path-effect* :fill)
+            (*core-graphics-path-drawing-mode-value* #$kCGPathFill))
+        (context-poly context locations aspects)))
+    (let ((path-mode (cg-path-drawing-mode *core-graphics-path-effect*))
+          (get-next-location nil)
+          (location-count (length locations))
+          (last-index -1))
+      (declare (type fixnum last-index location-count))
+      (when (> location-count 0)
+        (flet ((next-list-location ()
+                 (locally (declare (type list locations))
+                   (pop locations)))
+               (next-vector-location ()
+                 (locally (declare (type vector locations))
+                   (when (< (incf last-index) location-count)
+                     (aref locations last-index)))))
+          (declare (dynamic-extent #'next-list-location #'next-vector-location))
+          (etypecase locations
+            (cons (setf get-next-location #'next-list-location))
+            (vector (setf get-next-location #'next-vector-location)))
+          (with-location-vectors ((ndc-location))
+            (let ((location nil) (first-p t))
+                (#_CGContextBeginPath *cgcontextref*)
+
+                (loop (typecase (setf location (funcall get-next-location))
+                        (null (return))
+                        (fixnum (setf (aref ndc-location 0) (* 1.0d0 (point-h location))
+                                      (aref ndc-location 1) (* 1.0d0 (point-v location)))
+                                (setf location ndc-location))
+                        (location-ndc )
+                        (t (location-transform *context-projection-transform* location ndc-location)
+                           (setf location ndc-location)))
+                      (with-short-location-coordinates ((location ndc-x ndc-y))
+                        (cond (first-p
+                               (setf first-p nil)
+                               (#_CGContextMoveToPoint *cgcontextref* ndc-x ndc-y))
+                              (t 
+                               (#_CGContextAddLineToPoint *cgcontextref* ndc-x ndc-y)))))))
+          (unless (= path-mode #$kCGPathStroke) (#_CGContextClosePath *cgcontextref*))
+          (flet ((geometry ()
+                   (#_CGContextDrawPath *cgcontextref* *core-graphics-path-drawing-mode-value*)))
+            (declare (dynamic-extent #'geometry))
+            (call-with-projection-variables #'geometry aspects)))))))
+
+(defMethod context-poly ((context core-graphics-context) (locations function) &optional aspects)
+  "transform a sequence of points to ndc coordinates and render a polygon.
+   iff a location is a location-ndc, then the coordinates are not transformed"
+  #+og.assert-types (progn (assert-type *cgcontextref* macptr)
+                           (assert-type aspects sequence))
+  (if (eq *core-graphics-path-effect* :erase)
+    (with-cg-fill-color *core-graphics-background-color*
+      (let ((*core-graphics-path-effect* :fill)
+            (*core-graphics-path-drawing-mode-value* #$kCGPathFill))
+        (context-poly locations aspects)))
+    (let ((path-mode (cg-path-drawing-mode *core-graphics-path-effect*))
+          (location-count 0)
+          (first-p t))
+      (declare (type fixnum location-count))
+      (with-location-vectors ((ndc-vector))
+        (flet ((poly-generator (location)
+                 (typecase location
+                   (fixnum (setf (aref ndc-vector 0) (* 1.0s0 (point-h location))
+                                 (aref ndc-vector 0) (* 1.0s0 (point-v location)))
+                           (setf location ndc-vector))
+                   (location-ndc )
+                   (t (location-transform *context-projection-transform* location ndc-vector)
+                      (setf location ndc-vector)))
+                 (with-short-location-coordinates ((location ndc-x ndc-y))
+                   #+ignore (print (list ndc-x ndc-y))
+                   (cond (first-p
+                          (setf first-p nil)
+                          (#_CGContextMoveToPoint *cgcontextref* ndc-x ndc-y))
+                         (t 
+                          (#_CGContextAddLineToPoint *cgcontextref* ndc-x ndc-y))))
+                 (incf location-count)))
+          (declare (dynamic-extent #'poly-generator))
+          (#_CGContextBeginPath *cgcontextref*)
+          (funcall locations #'poly-generator)
+          (unless (= path-mode #$kCGPathStroke)
+            (#_CGContextClosePath *cgcontextref*))
+          (flet ((geometry ()
+                   (#_CGContextDrawPath *cgcontextref* *core-graphics-path-drawing-mode-value*)))
+            (declare (dynamic-extent #'geometry))
+            (call-with-projection-variables #'geometry aspects))))
+      location-count)))
+
+
+#|
+
+(defun drawpoly ()
+  (flet ((_moveto (x y) (traps::CGContextMoveToPoint *cgcontextref* (float x 0.0s0) (float y 0.0s0)))
+         (_lineto (x y) (traps::CGContextAddLineToPoint *cgcontextref* (float x 0.0s0) (float y 0.0s0))))
+    (#_CGContextBeginPath *cgcontextref*)
+    (_moveto 255S0 255S0)
+    (_lineto 199.60709S0 65.511894S0)
+    (_lineto 189.09518S0 55.0S0)
+    (_lineto 178.58328S0 65.511894S0)
+    (_lineto 168.07138S0 55.0S0)
+    (_lineto 10.392918S0 65.511894S0)
+    (_lineto 0.0S0 0.0S0)
+    ;(#_CGContextClosePath *cgcontextref*)
+    (#_CGContextDrawPath *cgcontextref* *core-graphics-path-drawing-mode-value*)))
+
+(defMethod context-poly ((context core-graphics-context) locations mode &optional properties)
+  (declare (ignore locations mode))
+  (call-with-projection-variables #'drawpoly properties))
+|#
+
+;;;
+;;; arc
+
+(defun core-graphics-arc-ndc (cgcontextref location radius start end direction &optional aspects)
+  "draw a rectangle given the 2d coordinates"
+  (declare (type location-vector location))
+  #+og.assert-types (progn (assert-type cgcontextref cgcontextref)
+                           (assert-type location location-vector)
+                           (assert-type aspects sequence))
+  (if (eq *core-graphics-path-effect* :erase)
+    (with-cg-fill-color *core-graphics-background-color*
+      (let ((*core-graphics-path-effect* :fill)
+            (*core-graphics-path-drawing-mode-value* #$kCGPathFill))
+        (core-graphics-arc-ndc cgcontextref location radius start end direction aspects)))
+    (with-short-location-coordinates ((location x y))
+      (with-coerced-variables ((short-float radius start end))
+        
+        (ecase direction
+          (:clockwise)
+          (:counterclockwise (rotatef start end)))
+        (#_CGContextBeginPath cgcontextref)
+        (#_CGCOntextAddArc cgcontextref x y radius start end *core-graphics-arc-orientation*)
+        (flet ((render-arc ()
+                 (#_CGContextDrawPath cgcontextref *core-graphics-path-drawing-mode-value*)))
+          (declare (dynamic-extent #'render-arc))
+          (call-with-projection-variables #'render-arc aspects))))))
+
+   
+
+;;;
+;;; text
+
+(defun core-graphics-text-ndc (cgcontext location string font &optional aspects)
+  (declare (type location-vector location))
+  #+og.assert-types (progn (assert-type cgcontext cgcontextref)
+                           (assert-type location location-vector)
+                           (assert-type string string)
+                           (assert-type aspects sequence))
+  (with-short-location-coordinates ((location x y))
+    (cond ((eq font t) (setf font *core-graphics-font*)))
+    (when font
+      (let ((name-size (etypecase font
+                         (keyword (get-font *projection-context* font))
+                         (cons font))))
+        (when name-size
+          (destructuring-bind (name size) name-size
+            (with-cfstrs ((name name))
+              (with-coerced-variables ((short-float size))
+                (#_CGContextSelectFont cgcontext name size
+                 #$kCGencodingmacroman)))))))
+    (with-cfstrs ((%string string))
+      (flet ((render-text ()
+               (#_CGContextShowTextAtPoint cgcontext x y %string (length string))))
+        (declare (dynamic-extent #'render-text))
+        (call-with-projection-variables #'render-text aspects)))))
+
+#|
+(defun core-graphics-text-ndc (gcontext x y string font properties)
+  (cond ((eq font t) (setf font *core-graphics-font*)))
+  (when font
+    (let ((name-size (etypecase font (keyword (get-font *projection-context* font))
+                                (cons font))))
+      (when name-size
+        (destructuring-bind (name size) name-size
+          (with-cfstrs ((name name))
+            (with-coerced-variables ((short-float size))
+              (#_CGContextSelectFont gcontext name size
+               #$kCGencodingmacroman)))))))
+  (with-cfstrs ((%string string))
+    (#_CGContextShowTextAtPoint gcontext x y %string (length string))))|#
+
+
+
+;;;
+;;; raster
+
+
+(defun core-graphics-raster-ndc (cgcontext location size raster &optional aspects)
+  #+og.assert-types (progn (assert-type cgcontext cgcontextref)
+                           (assert-types (location size) location-vector)
+                           (assert-type raster raster)
+                           (assert-type aspects sequence))
+  (with-short-location-coordinates ((location x y) (size dx dy))
+    (with-cgrect (the-rect :left x :top y :width dx :height dy)
+      (let ((image (sample-projection raster *projection-context*)))
+        (flet ((render-raster ()
+                 (#_CGContextDrawImage cgcontext #+ccl-5.2 :cgrect the-rect image)))
+          (declare (dynamic-extent #'render-raster))
+          (call-with-projection-variables #'render-raster aspects))))))
+
+
+(defMethod terminate-relation ((owner raster) (key (eql :cg-image)) image)
+  (when (and (macptrp image) (not (ccl:%null-ptr-p image)))
+    (#_CGImageRelease image)
+    (ccl:%setf-macptr image (ccl:%null-ptr))))
+
+
+(defmethod sample-introjection ((raster raster) (context core-graphics-context))
+  )
+
+(defmethod sample-projection ((raster raster) (context core-graphics-context))
+  (let ((sample-projection (context-get context raster :cg-image)))
+    (unless sample-projection
+      (let* ((size (sample-size raster))
+             (width (point-h size))
+             (height (point-v size))
+             (depth (sample-depth raster))
+             (sample-data (sample-data raster))
+             (bytes-per-pixel (/ depth 8))
+             (bytes-per-row (* width bytes-per-pixel))
+             (sample 0)
+             (image nil)
+             (length (* height bytes-per-row))
+             (data-offset 0))
+        (let ((data (#_NewPtr length)))
+          ;; fill the data
+          (dotimes (i height)
+            (setf data-offset (* i bytes-per-row))
+            (dotimes (j width)
+              (setf sample (sample-filter raster (aref sample-data i j) i j))
+              ;(when (zerop j) (format *trace-output* " ~8,'0x" sample))
+              (case depth
+                (8 (%put-byte data sample data-offset))
+                (16 (%put-word data sample data-offset))
+                (32
+                 ;; quarz wants the data in the high 24 bits
+                 (%put-long data (ash sample 8) data-offset)))
+              (incf data-offset bytes-per-pixel)))
+          ;; (format *trace-output* "~%image ~d bytes from ~s" length data)
+          (with-macptrs ((cspace (#_CGcolorSpaceCreateDeviceRGB))
+                         (provider (#_CGDataProviderCreateWithData (%null-ptr) data length (%null-ptr))))
+            (setf image (#_CGImageCreate width height 8 depth
+                         bytes-per-row
+                         cspace
+                         #$kCGImageAlphaNone
+                         provider
+                         (%null-ptr)
+                         0
+                         #$kCGRenderingIntentDefault ))
+            (#_CGDataProviderRelease provider)
+            (#_CGColorSpaceRelease cspace))
+          (format *trace-output* " = ~s" image)
+          (setf sample-projection image)
+          (setf (context-get context :cg-image raster) image))))
+    sample-projection))
+
+
+
+;;; general utilities
+;;;
+
+(defMacro with-cg-ndc-port-rect ((rectangle) &rest body)
+  `(let ((size (view-size *context-view*)))
+     (rlet ((%ctm :CGAFFINETRANSFORM)
+            (%inverse :CGAFFINETRANSFORM)
+            (%port-point :CGPOINT)
+            (%ndc-origin :CGPOINT)
+            (%ndc-size :CGPOINT))
+       (#_CGContextGetCTM *cgcontextref* %ctm)
+       (#_CGAffineTransformInvert %ctm #+ccl-5.2 :CGAFFINETRANSFORM %inverse)
+       (setf (rref %port-point cgpoint.x) 0.0s0
+             (rref %port-point cgpoint.y) 0.0s0)
+       (#_CGSizeApplyAffineTransform %port-point :cgpoint %ndc-origin #+ccl-5.2 :CGAFFINETRANSFORM %inverse)
+       (setf (rref %port-point cgpoint.x) (float (point-h size) 0.0s0)
+             (rref %port-point cgpoint.y) (float (point-v size) 0.0s0))
+       (#_CGPointApplyAffineTransform %port-point :cgpoint %ndc-size #+ccl-5.2 :CGAFFINETRANSFORM %inverse)
+       (with-cgrect (,rectangle :origin %ndc-origin :size %ndc-size)
+         ,@body))))
+
+
+(defMethod context-clear-view ((context core-graphics-context))
+  (with-cg-ndc-port-rect (%rect)
+    (cond ((null *core-graphics-background-color*)
+           (#_CGContextClearRect *cgcontextref* #+ccl-5.2 :cgrect %rect))
+          (t
+           (with-cg-fill-color *core-graphics-background-color*
+             (#_CGContextFillRect *cgcontextref* #+ccl-5.2 :cgrect %rect))))))
+
+(defMethod context-fill-view ((context core-graphics-context) &optional color)
+  (with-cg-ndc-port-rect (%rect)
+    (typecase color
+      (null (#_CGContextFillRect *cgcontextref* #+ccl-5.2 :cgrect %rect))
+      (raster
+       ;; make a pattern and fill with that
+       )
+      (t
+       (with-coerced-variables ((short-location-vector color))
+         (with-cg-fill-color  color
+           (#_CGContextFillRect *cgcontextref* #+ccl-5.2 :cgrect %rect)))))))
+
+
+
+
+;;;
+;;; properties
+;;;
+;;; colors require parallel state as they cannot be read out (ie there's no CGContextGetFillColor)
+
+(defun cg-call-with-fill-color (function color)
+  (if (and nil (eq color *core-graphics-fill-color*))
+    (funcall function)
+    (with-coerced-variables ((short-location-vector color))
+      (let ((old-color *core-graphics-fill-color*)
+            (*core-graphics-fill-color* color))
+        (unwind-protect (progn (#_CGContextSetRGBFillColor *cgcontextref*
+                                (aref color 0) (aref color 1) (aref color 2) (aref color 3))
+                               (funcall function))
+          (#_CGContextSetRGBFillColor *cgcontextref*
+           (aref old-color 0) (aref old-color 1) (aref old-color 2) (aref old-color 3)))))))
+
+
+
+
+(defun core-graphics-fill-color*4 (cgcontextref r g b &optional (a 1.0s0))
+  (declare (optimize (speed 3) (safety 0)))
+  (with-short-float-intensity-variables (r g b a)
+    (with-coerced-variables ((short-location-vector *core-graphics-fill-color*))
+      (setf (aref *core-graphics-fill-color* 0) r
+            (aref *core-graphics-fill-color* 1) g
+            (aref *core-graphics-fill-color* 2) b
+            (aref *core-graphics-fill-color* 3) a)
+      (#_CGContextSetRGBFillColor cgcontextref r g b a)
+      *core-graphics-fill-color*)))
+
+(defMethod context-fill-agent*3 ((context core-graphics-context) r g b)
+  (core-graphics-fill-color*4 *cgcontextref* r g b 1.0s0))
+
+(defMethod context-fill-agent*4 ((context core-graphics-context) r g b &optional a)
+  ; optional to allow call from fill-color w/o length check
+  (core-graphics-fill-color*4 *cgcontextref* r g b (if a a 1.0s0)))
+
+(defMethod context-set-fill-agent ((context core-graphics-context) color &optional g b a)
+  (etypecase color
+    (number
+     (core-graphics-fill-color*4 *cgcontextref* color g b (if a a 1.0s0)))
+    (cons
+     (apply #'core-graphics-fill-color*4 *cgcontextref* (if (symbolp (first color)) (rest color) color)))
+    ((or vector location-3)
+     (with-coerced-variables ((short-location-vector *core-graphics-fill-color*))
+       (location-vector-copy color *core-graphics-fill-color*)
+       (#_CGContextSetRGBFillColor *cgcontextref*
+          (aref *core-graphics-fill-color* 0) (aref *core-graphics-fill-color* 1)
+          (aref *core-graphics-fill-color* 2) (aref *core-graphics-fill-color* 3))
+       *core-graphics-fill-color*))))
+
+(defMethod context-save-fill-agent ((context core-graphics-context))
+  (flet ((reset-fill-and-release-vector (context color)
+           (context-set-fill-agent context color)
+           (return-short-location-vector color)))
+    (push-projection-variable #'reset-fill-and-release-vector context
+                             (location-vector-copy *core-graphics-fill-color* (get-short-location-vector)))))
+
+
+
+(defun core-graphics-stroke-color*4 (cgcontextref r g b &optional (a 1.0s0))
+  (declare (optimize (speed 3) (safety 0)))
+  (with-short-float-intensity-variables (r g b a)
+    (with-coerced-variables ((short-location-vector *core-graphics-stroke-color*))
+      (setf (aref *core-graphics-stroke-color* 0) r
+            (aref *core-graphics-stroke-color* 1) g
+            (aref *core-graphics-stroke-color* 2) b
+            (aref *core-graphics-stroke-color* 3) a)
+      (#_CGContextSetRGBStrokeColor cgcontextref r g b a)
+      *core-graphics-stroke-color*)))
+
+(defMethod context-stroke-agent*3 ((context core-graphics-context) r g b)
+  (core-graphics-stroke-color*4 *cgcontextref* r g b 1.0s0))
+
+(defMethod context-stroke-agent*4 ((context core-graphics-context) r g b &optional a)
+  (core-graphics-stroke-color*4 *cgcontextref* r g b (if a a 1.0s0)))
+
+(defMethod context-set-stroke-agent ((context core-graphics-context) color &optional g b a)
+  (etypecase color
+    (number
+     (core-graphics-stroke-color*4 *cgcontextref* color g b (if a a 1.0s0)))
+    (cons
+     (apply #'core-graphics-stroke-color*4 *cgcontextref* (if (symbolp (first color)) (rest color) color)))
+    ((or vector location-3)
+     (with-coerced-variables ((short-location-vector *core-graphics-stroke-color*))
+       (location-vector-copy color *core-graphics-stroke-color*)
+       (#_CGContextSetRGBStrokeColor *cgcontextref*
+        (aref *core-graphics-stroke-color* 0) (aref *core-graphics-stroke-color* 1)
+        (aref *core-graphics-stroke-color* 2) (aref *core-graphics-stroke-color* 3))
+       *core-graphics-stroke-color*))))
+
+(defMethod context-save-stroke-agent ((context core-graphics-context))
+  (flet ((reset-stroke-and-release-vector (context color)
+           (setf (context-stroke-agent context) color)
+           (return-short-location-vector color)))
+    (push-projection-variable #'reset-stroke-and-release-vector context
+                             (location-vector-copy *core-graphics-stroke-color* (get-short-location-vector)))))
+
+
+
+
+(defun core-graphics-background-color*4 (cgcontextref r g b &optional (a 1.0s0))
+  (declare (optimize (speed 3) (safety 0))
+           (ignore cgcontextref))
+  (with-short-float-intensity-variables (r g b a)
+    (with-coerced-variables ((short-location-vector *core-graphics-background-color*))
+      ;; ther eis no core-graphics state for background color
+      (setf (aref *core-graphics-background-color* 0) r
+            (aref *core-graphics-background-color* 1) g
+            (aref *core-graphics-background-color* 2) b
+            (aref *core-graphics-background-color* 3) a)
+      *core-graphics-background-color*)))
+  
+(defMethod context-clear-agent*3 ((context core-graphics-context) r g b)
+  (core-graphics-background-color*4 *cgcontextref* r g b 1.0s0))
+
+(defMethod context-clear-agent*4 ((context core-graphics-context) r g b &optional a)
+  (core-graphics-background-color*4 *cgcontextref* r g b (if a a 1.0s0)))
+
+(defMethod context-set-clear-agent ((context core-graphics-context) color &optional g b a)
+  (etypecase color
+    (number
+     (core-graphics-background-color*4 *cgcontextref* color g b (if a a 1.0s0)))
+    (cons
+     (apply #'core-graphics-background-color*4 *cgcontextref* (if (symbolp (first color)) (rest color) color)))
+    ((or vector location-3)
+     (with-coerced-variables ((short-location-vector *core-graphics-background-color*))
+       (location-vector-copy color *core-graphics-background-color*)
+       *core-graphics-background-color*))))
+
+(defMethod context-save-clear-agent ((context core-graphics-context))
+  (flet ((reset-background-and-release-vector (context color)
+           (context-set-background-color context color)
+           (return-short-location-vector color)))
+    (push-projection-variable #'reset-background-and-release-vector context
+                             (location-vector-copy *core-graphics-background-color* (get-short-location-vector)))))
+
+
+
+
+;;;
+;;; path mode
+
+(defMethod context-set-path-constituents ((context core-graphics-context) mode)
+  ;; (setf *core-graphics-path-effect* (gethash *context-path-constituents* *path-constituents-map*))
+  (setf *core-graphics-path-effect* (gethash mode *path-constituents-map*))
+  (setf *core-graphics-path-drawing-mode-value*
+        (or (rest (assoc *core-graphics-path-effect*
+                         *core-graphics-path-drawing-mode-map*))
+            (error "invalid path mode: ~s." mode))))
+
+(defMethod context-save-path-mode ((context core-graphics-context))
+  (push-projection-variable #'context-set-path-constituents *core-graphics-path-effect* context))
+
+
+
+
+;;;
+;;; color mode
+
+(defMethod context-set-color-mode ((context core-graphics-context) mode &rest args)
+  "core graphics supports a alpha combination factor for images?"
+  (declare (dynamic-extent args))
+  (destructuring-bind (&optional source-factor destination-factor) args
+    (declare (ignore destination-factor))
+    (ecase mode
+      ((:source :opaque) (setf *core-graphics-color-mode* :opaque
+                     *core-graphics-color-alpha-factor* 1.0s0)
+               (#_CGContextSetAlpha *cgcontextref* 1.0s0))
+      (:blend )
+      (:alpha (with-coerced-variables ((short-float source-factor))
+                (setf *core-graphics-color-mode* :blend
+                      *core-graphics-color-alpha-factor* source-factor)
+                (#_CGContextSetAlpha *cgcontextref* source-factor))))))
+
+(defMethod context-save-color-mode ((context core-graphics-context))
+  (push-projection-variable #'(setf context-color-mode)
+                           *core-graphics-color-mode* context *core-graphics-color-alpha-factor*))
+  
+
+
+;;;
+;;; transforms
+
+(defMethod context-view-transform ((context core-graphics-context))
+  "refresh the matrix from the cg context whe it is active. otherwise use the current value"
+  (let ((matrix (call-next-method))
+        (cgcontext (context-ndc-context context)))
+    (declare (type transform-matrix matrix))
+    (when cgcontext
+      (rlet ((ctm :CGAFFINETRANSFORM))
+        (#_CGContextGetCTM cgcontext ctm)
+        (setf (aref matrix 0 0) (* 1.0d0 (rref ctm cgaffinetransform.a))
+              (aref matrix 0 1) (* 1.0d0 (rref ctm cgaffinetransform.b))
+              (aref matrix 1 0) (* 1.0d0 (rref ctm cgaffinetransform.c))
+              (aref matrix 1 1) (* 1.0d0 (rref ctm cgaffinetransform.d))
+              (aref matrix 3 0) (* 1.0d0 (rref ctm cgaffinetransform.tx))
+              (aref matrix 3 1) (* 1.0d0 (rref ctm cgaffinetransform.ty)))))
+    matrix))
+
+(defMethod context-set-view-transform ((context core-graphics-context) op &rest args)
+  "the view transform operations are passed through to the core graphics functions.
+   the arguments vary by operation: scaling and translation use two of three, rotation one of three, catenation and setting either a list of 16 or 6 metrix entries or a six-entry affine transform matrix."
+  (flet ((clear-ctm ()
+           (rlet ((ctm :CGAFFINETRANSFORM)
+                  (inverse :CGAFFINETRANSFORM))
+             (#_CGContextGetCTM *cgcontextref* ctm)
+             (#_CGAffineTransformInvert ctm  #+ccl-5.2 :CGAFFINETRANSFORM inverse)
+             (#_CGContextConcatCTM *cgcontextref* #+ccl-5.2 :CGAFFINETRANSFORM inverse)))
+         (call-with-transform (function transform-args)
+           (etypecase (first transform-args)
+             (number (ecase (length transform-args)
+                       (16 (destructuring-bind (_00 _01 _02 _03
+                                                _10 _11 _12 _13
+                                                _20 _21 _22 _23
+                                                _30 _31 _32 _33) transform-args
+                             (declare (ignore _02 _03 _12 _13 _20 _21 _22 _23 _32 _33))
+                             (with-coerced-variables ((short-float _00 _01 _10 _11 _30  _31))
+                               (rlet ((ctm :short-matrix_3x2
+                                           :_00 _00 :_01 _01
+                                           :_10 _10 :_11 _11
+                                           :_20 _30 :_21 _31))
+                                 (funcall function ctm)))))
+                       (6 (destructuring-bind (_00 _01 _10 _11 _20 _21) transform-args
+                            (with-coerced-variables ((short-float _00 _01 _10 _11 _20  _21))
+                              (rlet ((ctm :short-matrix_3x2
+                                          :_00 _00 :_01 _01
+                                          :_10 _10 :_11 _11
+                                          :_20 _20 :_21 _21))
+                                (funcall function ctm)))))))
+             (array (let ((matrix (first args)))
+                      #+ignore (dotimes (i 4)
+                        (format *trace-output* "~%(~d ~d ~d)" (aref matrix i 0) (aref matrix i 1) (aref matrix i 2) (aref matrix i 3)))
+                      (rlet ((ctm :short-matrix_3x2
+                                  :_00 (coerce (aref matrix 0 0) 'short-float) :_01 (coerce (aref matrix 0 1) 'short-float)
+                                  :_10 (coerce (aref matrix 1 0) 'short-float) :_11 (coerce (aref matrix 1 1) 'short-float)
+                                  :_20 (coerce (aref matrix 3 0) 'short-float) :_21 (coerce (aref matrix 3 1) 'short-float)))
+                        (funcall function ctm)))))))
+    ;; first, apply the change
+    (prog1 (ecase op
+             (:scale (destructuring-bind (x &optional y z) args
+                       (declare (ignore z))
+                       (spread-optional-coordinates_ x y)
+                       (with-coerced-variables ((short-float x y))
+                         (#_CGContextScaleCTM *cgcontextref* x y))))
+             (:translate (destructuring-bind (x y z) args
+                           (declare (ignore z))
+                           (spread-optional-coordinates_ x y)
+                           (with-coerced-variables ((short-float x y))
+                             (#_CGContextTranslateCTM *cgcontextref* x y))))
+             (:rotate (destructuring-bind (x &optional y z) args
+                        (declare (ignore y))
+                        (ecase x
+                          (number (unless (numberp z) (setf z x)))
+                          (location-3 (setf z (Location-z x))))
+                        (with-coerced-variables ((short-float z))
+                          (#_CGContextRotateCTM *cgcontextref* z))))
+             (:catenate (call-with-transform #'(lambda (ctm)
+                                                 (#_CGContextConcatCTM *cgcontextref* #+ccl-5.2 :CGAFFINETRANSFORM ctm))
+                                             args))
+             (:set (call-with-transform #'(lambda (transform)
+                                            (clear-ctm)
+                                            (#_CGContextConcatCTM *cgcontextref* #+ccl-5.2 :CGAFFINETRANSFORM transform))
+                                        args))
+             (:clear (clear-ctm)))
+      ;; then normalize the pen size
+      (let ((pen-width (/ *core-graphics-stroke-width* 1.414s0))
+            (user-pen-size 1))
+        ;; compute the effect of the current transform on a given pen and
+        ;; invert it to get the effective pen size        
+        (rlet ((ctm :CGAFFINETRANSFORM)
+               (user-point :CGPoint :x pen-width :y pen-width)
+               (view-point :CGPoint :x 0.0s0 :y 0.0s0))
+             (#_CGContextGetCTM *cgcontextref* ctm)
+             (setf (rref ctm :CGAFFINETRANSFORM.tx) 0.0s0)
+             (setf (rref ctm :CGAFFINETRANSFORM.ty) 0.0s0)
+             #+ignore (ccl:print-record ctm :CGAFFINETRANSFORM)
+             (#_CGPointApplyAffineTransform user-point #+ccl-5.2 :CGPoint view-point #+ccl-5.2 :CGAFFINETRANSFORM ctm)
+             #+ignore (ccl:print-record user-point :CGPoint)
+             (setf user-pen-size  (/ (* 1.414s0 0.2s0) (+ (abs (rref view-point CGPoint.x)) (abs (rref view-point CGPoint.y)))))
+             #+ignore (print user-pen-size)
+             (#_CGContextSetLineWidth *cgcontextref* user-pen-size)
+             )
+        ))))
+
+
+#|
+
+
+(defParameter *w* (make-instance 'window :color-p t :view-size (make-point 256 256)))
+(defparameter *cgc* (make-instance 'core-graphics-context :view *w*))
+
+(defun test-cg (function)
+  (call-with-projection-context function *cgc*))
+
+(defun graphics-sampler ()
+  (line*3 0.0d0 0.0d0 0.0d0 100.0d0 100.0d0 100.0d0))
+
+(trace line*3 cg-line-ndc cg-line*3)
+
+(test-cg #'graphics-sampler)
+
+(with-projection-context (*cgc*)
+  (let ((size (ccl:view-size *w*)))
+    (clear-view)
+    (og.impl::context-set-view-transform
+     *cgc*
+     :set (* (ccl:point-h size) 1.0s0) 0.0
+          0.0 (/ (ccl:point-v size) -2.0s0)
+          0.0 (/ (ccl:point-v size) 2.0s0))
+    (dotimes (i 50) (line*2 0.1 0.0 0.9 (+ -0.9 (* (/ i 25.0) 0.9))))))
+
+(let ((data (make-array '(128 128) :element-type t :initial-element nil)))
+  (dotimes (i 128)
+    (dotimes (j 128)
+      (setf (aref data i j) (list 16 16 16))))
+  (dotimes (x 128)
+    (let ((y (+ 64 (round (* 63 (sin (* 4 pi (/ x 128))))))))
+      (setf (aref data y x) (list (* x 2) 0 (- 256 (* x 2))))))
+  (defparameter *raster* (make-instance 'raster :location (make-location-world :x 0.0d0 :y 0.0d0)
+                                      :sample-depth 32
+                                      :sample-data data)))
+
+(test-op #'(lambda () (cg-erase)))
+(test-op #'(lambda () (cg-raster*2 10.0d0 10.0d0 64.0d0 64.0d0 *raster*)))
+(test-op #'(lambda () (cg-raster*2 10.0d0 10.0d0 128.0d0 128.0d0 *raster*)))
+(terminate *qc*)
+
+
+(defparameter *jgp-gworld*
+  (cg-load-jpeg-image #P"MCL 4.3.1 CD:User Contributed Code:Graphics:image-windows:garden/JPEG"))
+
+(test-op #'(lambda ()
+             (ccl::with-rectangle-arg (dest-rect #@(0 0) #@(269 179))
+                                       ;(ccl:view-position *w*) (add-points (ccl:view-position *w*) #@(269 179)))
+               (ccl::with-rectangle-arg (src-rect (make-point 0 0) #@(269 179))
+                 (let* ((dest-bitmap (#_GetPortBitMapForCopyBits (#_GetWindowPort (wptr *w*)))))
+                   (fresh-line)
+                   (print-record (#_GetPortBitMapForCopyBits *jgp-gworld*) :pixmap)
+                   (fresh-line)
+                   (print-record dest-bitmap :pixmap)
+                   
+                   (#_LockPixels (#_GetGWorldPixMap *jgp-gworld*))
+                   (#_LockPixels dest-bitmap)
+                   (#_CopyBits (#_GetPortBitMapForCopyBits *jgp-gworld*)  ; using GetPort() here fails
+                    dest-bitmap src-Rect dest-Rect #$srcCopy (%null-ptr))
+                   (#_UnlockPixels (#_GetGWorldPixMap *jgp-gworld*))
+                   (#_UnlockPixels dest-bitmap)
+                   )))))
+
+(#_DisposeGWorld *jgp-gworld*)
+(describe *jgp-gworld*)
+
+
+(ccl:print-record (context-get *qc* *raster* :pixmap) :pixmap)
+(ccl:print-record (#_GetPortPixmap (#_GetWindowPort (wptr *w*))) :pixmap)
+
+;; marking a pixmap
+
+(with-dereferenced-handles ((pixmap &pixmap))
+  (assert (not (%null-ptr-p pixmap)))
+  (let ((pixmap-baseaddr (#_GetPixBaseAddr &pixmap))
+        (bytes-per-row (#_GetPixRowBytes &pixmap))
+        (pixmap-offset 0)
+        (sample #xffffff)
+        (size (ccl::get-image-size image-file)))
+    (dotimes (i (point-v size))
+      (when (oddp i)
+        (setf pixmap-offset (* i bytes-per-row))
+        (dotimes (j (point-h size))
+          (%put-long pixmap-baseaddr sample pixmap-offset)
+          (incf pixmap-offset 4))))))
+
+                    
+
+;; this passage in the pixmap generator  crashed
+(let ((&permanent-pixmap (#_NewPixmap))
+      (permanent-data nil)
+      (byte-length (* bytes-per-row (point-v size))))
+  (#_CopyPixmap &pixmap &permanent-pixmap)
+  (setf permanent-data (#_NewPtr byte-length))
+  (dotimes (i byte-length) (%put-byte permanent-data (ccl:%get-byte pixmap-baseaddr i) i))
+  (rset &permanent-pixmap pixmap.baseaddr &pixmap))
+
+;; which means this is untried
+(defun quicktime-raster*2ndc (x1 y1 x2 y2 raster &optional properties)
+  (let* ((offset (port-offset raster))
+         (offset-topleft (add-points (make-point x1 y1) offset))
+         (offset-bottomright (add-points (make-point x2 y2) offset))
+         (src-pixmap (sample-projection raster *projection-context*)))
+    (with-rectangle-arg (dest-rect offset-topleft offset-bottomright)
+      (with-rectangle-arg (src-rect (make-point 0 0) (sample-size raster))
+        (let* ((dest-bitmap (#_GetPortBitMapForCopyBits (#_GetWindowPort (wptr *context-view*)))))
+          (flet ((raster ()
+                   (#_LockPixels src-pixmap)
+                   (#_LockPixels dest-bitmap)
+                   (#_CopyBits src-pixmap  ; using GetPort() here fails
+                    dest-bitmap src-Rect dest-Rect #$srcCopy (%null-ptr))
+                   (#_UnlockPixels src-pixmap)
+                   (#_UnlockPixels dest-bitmap)
+                   ))
+            (declare (dynamic-extent #'raster))
+            (call-with-projection-variables #'raster properties))
+            )))))
+
+(defun quicktime-raster*2ndc (x1 y1 x2 y2 raster &optional properties)
+  (let* ((offset (port-offset raster))
+         (offset-topleft (add-points (make-point x1 y1) offset))
+         (offset-bottomright (add-points (make-point x2 y2) offset))
+         (gworld (sample-projection raster *projection-context*)))
+    (with-rectangle-arg (dest-rect offset-topleft offset-bottomright)
+      (with-rectangle-arg (src-rect (make-point 0 0) (sample-size raster))
+        (let* ((port (#_GetWindowPort (wptr *context-view*)))
+               (dest (#_GetPortBitmapForCopyBits port))
+               (context nil))
+          (rlet ((&context :handle))
+                     (#_LockPixels pixmap)
+            (print (list :src pixmap)) (fresh-line) (ccl:print-record pixmap :pixmap)
+            (print (list :dest dest)) (fresh-line) (ccl:print-record dest :pixmap)
+            (flet ((raster ()
+                     ; (inspect pixmap)
+                     #|(copy-bits pixmap dest
+                                src-rect dest-rect
+                                :srcCopy ; 50 ; :srcXor ;*quicktime-raster-operation*
+                                (rref port grafport.visRgn)
+                                )|#
+                     (#_CopyBits :ptr pixmap :ptr dest :ptr src-rect :ptr dest-rect :word 0 :ptr (ccl:%null-ptr))
+                     ))
+              (declare (dynamic-extent #'raster))
+              (call-with-projection-variables #'raster properties))
+
+            ;; needs quartz
+            (#_UnLockPixels pixmap)
+            (#_QDBeginCGContext port &context)
+            (print &context)
+            (setf context (ccl:%get-ptr &context))
+            (print context)
+            ;(#_CGContextBeginPath context)
+            ;(#_CGContextMoveToPoint context 0.0s0 0.0s0)
+            ;(#_CGContextAddLineToPoint context 100.0s0 100.0s0)
+            ;(#_CGContextClosePath context)
+            (#_QDEndCGContext port &context)
+            ))))))
+
+|#
+:eof
+

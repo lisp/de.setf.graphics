@@ -1,0 +1,83 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: OG; Base: 10; Lowercase: Yes -*-
+
+;;;; --------------------------------------------------------------------------
+;;;; OG-sphere.Lisp -----------------------------------------------------------
+
+;;;; jaa 	081189	ported to clx/pcl
+
+;;;; --------------------------------------------------------------------------
+(in-package :og)
+(export '(sphere sphere-location sphere-end
+                    sphere-properties sphere-attributes
+                    sphere-radius
+                    make-sphere))
+
+;;;; --------------------------------------------------------------------------
+(eval-when (eval compile load)
+  (defGraphicElement (sphere (:print-function print-og-sphere))
+    (radius 0.0 :type long-float))
+  )
+
+
+;;;; --------------------------------------------------------------------------
+;;;; drawing methods
+
+
+(defClassFun (draw-self og-sphere)
+    (drawable)
+  (declare (object-variable location radius))
+  (graphics-circle drawable location radius))
+
+(defClassFun (draw-region og-sphere)
+    (drawable &aux r)
+  (declare (object-variable location radius))
+  (setq r (coordinate-scale drawable (make-coordinate-world :x radius)))
+  (incf (coordinate-2-x r) 2)
+  (incf (coordinate-2-y r) 2)
+  (setf r (coordinate-inverse-scale drawable r))
+  (graphics-circle drawable location r))
+
+
+;;;; --------------------------------------------------------------------------
+;;;; editing methods
+
+(defClassFun (edit-self og-sphere)
+  (&key where drawable (context drawable) (mode :position)
+   &aux new-line)
+  (warn "NYI: edit-self og-sphere")
+  (setq new-line (copy-instance self))
+  new-line)
+
+;;;; --------------------------------------------------------------------------
+;;;; constructor function
+
+(defClassFun (make-self og-sphere)
+  (definition &aux (keys (cdddr definition)))
+  (declare (object-variable location end attributes properties radius))
+  (make-og-sphere :location (or (first definition) (eval location))
+		  :end (or (second definition) (eval end))
+		  :radius (or (third definition) (eval radius))
+		  :attributes (or (getf keys :attributes)
+				  (eval attributes))
+		  :properties (or (getf keys :properties)
+				  (eval properties))))
+
+;;;; --------------------------------------------------------------------------
+;;;; print function
+
+(defun print-og-sphere (element
+			&optional (stream *standard-output*)
+                                  (print-level 0))
+  (declare (special *standard-output*)
+           (ignore print-level))
+  (write-string "#g(og-sphere " stream)
+  (write (og-sphere-location element) :stream stream)
+  (write-char #\space stream)
+  (write (og-sphere-radius element) :stream stream)
+  (format stream " ~@{~*~@[~1:* ~s ~s~]~}"
+	  :attributes (og-sphere-attributes element)
+	  :properties (og-sphere-properties element))
+  (write-char #\) stream))
+
+;;;; --------------------------------------------------------------------------
+:eof

@@ -1,0 +1,85 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: OG; Base: 10; Lowercase: Yes -*-
+
+;;;; ----------------------------------------------------------------------------
+;;;; OG-stroke.Lisp -------------------------------------------------------------
+
+;;;; jaa dtmg	140688
+
+;;;; ----------------------------------------------------------------------------
+
+(in-package 'og :use '(user lisp ccl))
+
+(eval-when (eval load compile)
+  (require 'og-definitions "Object-Graphics;og-definitions"))
+
+(export '(og-stroke og-stroke-p
+          og-stroke-location og-stroke-size og-stroke-brush
+          og-stroke-attributes
+          draw-self draw-region
+          make-self))
+
+;;;; ----------------------------------------------------------------------------
+
+(eval-when (eval compile load)
+  (require 'og-definitions "Object-Graphics;OG-definitions")
+
+  (def-graphic-element (og-stroke (:print-function print-og-stroke))
+    (brush 'circle-brush)))
+
+
+;;;; ----------------------------------------------------------------------------
+;;;; drawing methods
+
+(defOBFUN (draw-self og-stroke)
+          (drawable &optional parameters
+                    &aux (the-brush
+                          (slot-default parameters og-stroke brush))
+                         (the-location
+                          (slot-default parameters og-stroke location)))
+  (if the-brush
+    (ask drawable
+      (if (fboundp the-brush)
+        (apply the-brush (list the-location))))))
+
+(defOBFUN (draw-region og-stroke)
+          (drawable &optional parameters
+                    &aux (the-location
+                          (slot-default parameters og-stroke location))
+                         (the-size
+                          (slot-default parameters og-stroke size)))
+  (ask drawable (graphics-rectangle the-location
+                                    (add-points the-location the-size))))
+
+
+;;;; ----------------------------------------------------------------------------
+;;;; constructor function
+
+(defOBFUN (MAKE-SELF og-stroke) (definition &aux (keys (cdddr definition)))
+  (declare (object-variable size brush))
+  (make-og-stroke :location (first definition)
+                  :brush (or (second definition) (eval brush))
+                  :attributes (or (getf keys :attributes) (eval attributes))
+                  :properties (or (getf keys :properties) (eval properties))))
+
+;;;; ----------------------------------------------------------------------------
+;;;; print function
+
+(defun print-og-stroke (stroke &optional (stream *standard-output*)
+                                (print-level *print-level*))
+  (declare (special *print-level* *standard-output* ccl::*file-stream*)
+           (ignore print-level))
+  (when (not (print-element-label-reference stroke stream))
+    (write-string "#g(og-stroke " stream)
+    (print-coordinate (og-stroke-location stroke) stream)
+    (write-char #\space stream)
+    (write (og-stroke-brush stroke) :stream stream)
+    (format stream " ~@{~*~@[~1:* ~s ~s~]~}"
+            :attributes (og-stroke-attributes stroke)
+            :properties (og-stroke-properties stroke))
+    (write-char #\) stream)))
+
+
+;;;; ----------------------------------------------------------------------------
+;;;; eof.
+'og-stroke
+

@@ -42,6 +42,7 @@
 ;;;
 ;;; mcl defines #P"home:" to be the start-up directory, ofter the same as #P"ccl:". in this case,
 ;;; set the XAUTHORITY environment variable or set a link from #4P"home:.Xauthority" to "~/.Xauthority".
+;;; in the latter case, xlib::homedir-file-pathname may need a patch to recognize osx.
 
 ;;; for my 'localhost', either or
 (setq *clx-display-host* "yoda.setf.de")
@@ -261,13 +262,15 @@
 (when (typep *clx-c* 'clx-context)
   (execute-graphics-clx-tests))
 
-
-
+;; (setf (context-log *clx-c*) nil) ;;  *trace-output*)
 ;; (with-projection-context (*clx-c*) (test:execute-test :og.projection.poly.3 :break-on-signals t))
 ;; (with-projection-context (*clx-c*) (xlib:screen-root-depth *clx-screen*))
 ;; (with-projection-context (*clx-c*) (xlib:drawable-depth (context-view *clx-c*)))
 ;; (with-projection-context (*clx-c*) (test-color))
-;; (with-projection-context (*clx-c*) (test-sampler-animation :count 2 :sleep .01))
-;; (time (with-projection-context (*clx-c*) (test-sampler-animation :count 100 :sleep nil)))
+;; (with-projection-context (*clx-c*) (test:execute-test :og.projection.translated-rectangles-test.1))
+;; (with-projection-context (*clx-c*) (test:execute-test :og.projection.sampler.1))
+;; (with-projection-context (*clx-c*) (let ((*test-sleep* 0.05)) (test:execute-test :og.projection.sampler.2)))
+;; (time (with-projection-context (*clx-c*) (initialize-test-context *clx-c*) (test-sampler-animation :count 100 :sleep nil)))
+;; (with-projection-context (*clx-c*) (initialize-test-context *clx-c*) (run-life :cycles 256 :sleep nil :initialize-p t :size 512))
 
 

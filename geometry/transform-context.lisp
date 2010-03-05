@@ -3,7 +3,8 @@
 (in-package :de.setf.object-graphics.implementation)
 
 
-(document "This file defines an coordinate transformation contexts for the 'de.setf.graphics' library."
+(document "This file defines coordinate transformation contexts for the 'de.setf.graphics' library."
+
   (copyright
    "Copyright 2010 [james anderson](mailto:james.anderson@setf.de) All Rights Reserved"
    "'de.setf.graphics' is free software: you can redistribute it and/or modify it under the terms of version 3
@@ -26,7 +27,7 @@
 
 
 
-(defClass transform-context ()
+(defclass transform-context ()
   ((transform
     :initarg :transform :initform nil
     :documentation
@@ -55,20 +56,20 @@
    view-transform
    port-parameters))
 
-(defMethod context-transform ((context transform-context))
+(defmethod context-transform ((context transform-context))
   (with-slots (transform view-transform projection-transform)
               context
     (if transform transform
         (setf transform 
               (matrix-catenate projection-transform view-transform)))))              
 
-(defMethod context-inverse-transform ((context transform-context))
+(defmethod context-inverse-transform ((context transform-context))
   (with-slots (transform inverse-transform) context
     (or inverse-transform
         (setf inverse-transform
               (matrix-inverse transform (transform-matrix))))))
 
-(defMethod call-with-projection-context
+(defmethod call-with-projection-context
            ((function t) (context transform-context)
             &key
             &allow-other-keys)

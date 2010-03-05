@@ -29,6 +29,13 @@
  3x3 matrices, while location-4's are combined with 4x4 matrices."))
 
 
+(setq *context-view-transform* (matrix-identity (transform-matrix)))
+
+(setq *context-projection-transform* (matrix-identity (transform-matrix)))
+
+(setq *context-transform* (matrix-identity (transform-matrix)))
+
+
 (defmacro coerce-coordinates (location-vector x y z &optional h)
   "coerce the coordinate variables to double-float store them in a location vector."
   (flet ((coerce-form (exp)
@@ -291,9 +298,9 @@ each binding take the form <code>((<i>x</i> <i>y</i> &optional <i>z</i>) <i>worl
       (setf x (float (aref p 0) 0.0d0) y (float (aref p 1) 0.0d0) z (float (aref p 2) 0.0d0))
       (setf hr (+ (+ (* x (aref m 0 3)) (* y (aref m 1 3))) (+ (* z (aref m 2 3)) (aref m 3 3))))
       (if (= hr 0.0d0)
-        (setf xr most-positive-fixnun
-              yr most-positive-fixnun
-              zr most-positive-fixnun)
+        (setf xr most-positive-fixnum
+              yr most-positive-fixnum
+              zr most-positive-fixnum)
         (setf xr (%round (/ (+ (+ (* x (aref m 0 0)) (* y (aref m 1 0))) (+ (* z (aref m 2 0)) (aref m 3 0))) hr))
               yr (%round (/ (+ (+ (* x (aref m 0 1)) (* y (aref m 1 1))) (+ (* z (aref m 2 1)) (aref m 3 1))) hr))
               zr (%round (/ (+ (+ (* x (aref m 0 2)) (* y (aref m 1 2))) (+ (* z (aref m 2 2)) (aref m 3 2))) hr))))

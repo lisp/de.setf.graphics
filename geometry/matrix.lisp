@@ -2,7 +2,7 @@
 
 (in-package :de.setf.object-graphics.implementation)
 
-(document "definitions for matrix-based location transforms for the 'de.setf.graphics' library."
+(document "This file defines matrix-based location transforms for the 'de.setf.graphics' library."
 
   (copyright "Copyright 2010 [james anderson](mailto:james.anderson@setf.de) All Rights Reserved"
              "'de.setf.graphics' is free software: you can redistribute it and/or modify it under the terms of version 3

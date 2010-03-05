@@ -1,0 +1,184 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+<DOCUMENTATION>
+ <title>abstract model classes</title>
+ <DESCRIPTION>
+  definition for the container root model class and the abstract node and leaf classes.
+  </DESCRIPTION>
+ <LICENSE href='../license.html' />
+ <CHRONOLOGY>
+  <DELTA DATE='20030901' AUTHOR='james.anderson@setf.de' />
+  <DELTA DATE='20050909' AUTHOR='james.anderson@setf.de'>
+   conditional class finalization before using class slots</DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION> 
+
+(in-package :de.setf.object-graphics.implementation)
+
+(defClass node (setf.graph:node)
+  ())
+
+(defClass model (node setf.graph:root)
+  ()
+  (:documentation
+   "a model is the root of a 3d scene graph. it manages the global model properties such as the extent and inventories, and binds as children the immediate scene components. these are likely to be compound elements which introduce locational or appearance properties, but could also be an elementary geometry component."))
+
+
+(defClass monad (node)
+  ((m-value 
+    :initform nil
+    :accessor m-value))
+  (:documentation
+   "a monad is the most abstract representation of an node in a scene graph. it extends the abstract setf.graph:node with a location slot."))
+
+(defClass dyad (monad)
+  ((d-value
+    :initform nil
+    :accessor d-value))
+  (:documentation
+   "a dyad extends a monadic node with an end slot."))
+
+(defClass polyad (dyad)
+  ((p-values
+    :initform nil
+    :accessor p-values))
+  (:documentation
+   "a polyad extends a dyadic node with an end slot."))
+
+(defClass triad (dyad)
+  ((t-value
+    :initform nil
+    :accessor t-value))
+  (:documentation
+   "a triad extends a polyadic node with an medial slot to bind the third location and constrains the position ordinality to three."))
+
+(defClass located (monad)
+  ((m-value
+    :initform (make-location 'world :x 0.0d0 :y 0.0d0 :z 0.0d0)
+    :initarg :location :initarg location
+    :accessor location)))
+
+(defClass appearance (node)
+   ((properties
+    :initform nil :initarg :properties :initarg properties
+    :accessor properties ))
+   (:documentation
+    "an appearance node adds a slot for composite manifest properties such as
+     color, or finish."))
+
+(defClass reference ()
+  ((reference
+    :initarg :reference :initarg reference
+    :accessor reference))
+  (:documentation
+   "a reference is a delegate for some other instance. it defines a single slot, reference, for a required base instance. it incorporates no intrinsic super-classes and is intended to be specialized as required for individual classes with the requisite delegate accessors."))
+
+(defClass child (node setf.graph:child)
+  ((parent
+    :initform nil :initarg :parent :initarg parent
+    :accessor parent)))
+
+(defClass constituent (child)
+  ((annotations
+    :initform nil :initarg :annotations :initarg annotations
+    :accessor annotations
+    :documentation
+    "binds the general apparent and positional properties of a constituent."))
+  (:documentation
+   "a constituent is a part of a component assembly."))
+
+(defClass component (constituent setf.graph:parent)
+  ((children
+    :initform nil :initarg :children :initarg children
+    :accessor children)
+   (connections
+    :initform nil :initarg :connections :initarg connections
+    :accessor connections))
+  (:documentation
+   "a component is an assembly, a structure that can have parts and connections. (see 'http://www-ksl.stanford.edu/knowledge-sharing/ontologies/html/component-modeling.text.html'). a component may be a constituent of another assembly."))
+
+(defClassInterfaces
+  :defaults (:predicate t)
+  monad
+  dyad
+  appearance
+  constituent
+  component
+  )
+
+;;;
+;;;
+
+
+
+;;;
+;;;
+
+#+ignore.in-library
+(defGeneric print-object-slot-names (function instance-class stream-class)
+  (:documentation "this is used by the denominated-progn method combination to generate constrain the method qualifiers introspectively.")
+  (:method ((function t) (instance-class class) (stream-class class))
+           "the general method just computes the names of the combined class and instance slots"
+           (finalize-if-needed instance-class)
+           (class-slot-names instance-class)))
+
+#+ignore.in-library
+(defmethod print-object-slots (instance stream)
+  (:method-combination denominated-progn
+                       :verbose-p nil
+                       :qualifiers print-object-slot-names
+                       )
+  (:method :between ((instance t) (stream t)) (write-string " " stream)))
+
+(defmethod print-object-slots m-value ((instance monad) (stream t))
+  "a default method for monads"
+  (format stream ":m-value ~s"
+          (when (slot-boundp instance 'm-value)
+            (slot-value instance 'm-value))))
+
+(defmethod print-object-slots d-value ((instance dyad) (stream t))
+  "a default method for dyads"
+  (format stream ":d-value ~s"
+          (when (slot-boundp instance 'd-value)
+            (slot-value instance 'd-value))))
+
+(defmethod print-object-slots t-value ((instance triad) (stream t))
+  "a default method for triads"
+  (format stream ":t-value ~s"
+          (when (slot-boundp instance 't-value)
+            (slot-value instance 't-value))))
+
+(defmethod print-object-slots p-value ((instance polyad) (stream t))
+  "a default method for polyads"
+  (write-string ":p-value " stream)
+  (print-unreadable-object ((when (slot-boundp instance 'p-value)
+                              (slot-value instance 'p-value))
+                            stream)))
+
+(defmethod print-object-slots m-value ((instance located) (stream t))
+  (format stream ":location ~s" (location instance)))
+
+(defmethod print-object-slots properties ((instance appearance) (stream t))
+  (write-string ":reference (" stream)
+  (let ((props (properties instance)))
+    (loop (unless props (return))
+          (print-unreadable-object ((pop props) stream))
+          (when props (write-char #\space stream))))
+  (write-char #\) stream))
+
+(defmethod print-object-slots reference ((instance reference) (stream t))
+  (format stream ":reference <~a>" (type-of (reference instance))))
+
+
+
+(defMethod print-object ((instance monad) stream)
+  (print-unreadable-object (instance stream :identity t :type t)
+    (print-object-slots instance stream)))
+
+
+#|
+(make-instance 'monad)
+(make-instance 'dyad)
+(make-instance 'located)
+|#
+:EOF

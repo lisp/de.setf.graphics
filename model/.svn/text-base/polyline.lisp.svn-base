@@ -1,0 +1,41 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+#|
+<DOCUMENTATION>
+ <title>polyline</title>
+ <DESCRIPTION>
+  definition for the polyline model class
+  </DESCRIPTION>
+ <CHRONOLOGY>
+  <DELTA DATE='19880616' AUTHOR='jaa@dtmg' />
+  <DELTA DATE='19891119' AUTHOR='jaa@dtmg' >ported to clx/pcl</DELTA>
+  <DELTA DATE='20030901' AUTHOR='james.anderson@setf.de' >scrne graph model</DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION>
+|#
+
+
+;;;; --------------------------------------------------------------------------
+;;;; editing methods
+
+#+:og-interactive
+
+
+
+
+;;;; --------------------------------------------------------------------------
+;;;; i/o functions
+
+
+
+(defObFun (print-object polygon)
+  (stream)
+  (write-string "#g(polygon " stream)
+  (write (polygon-points self) :stream stream)
+  (write-char #\space stream)
+  (write (polygon-properties self) :stream stream)
+  (write-char #\) stream))
+
+
+;;;; --------------------------------------------------------------------------
+:eof

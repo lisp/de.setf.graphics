@@ -1,0 +1,744 @@
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+
+
+<DOCUMENTATION>
+ <title>clim, the abstract graphics implementation</title>
+ <COPYRIGHT YEAR='2003' AUTHOR='james adam anderson' href='../load/sysdcl.lisp' />
+ <DESCRIPTION>
+  <p>
+  this file implements the abstract operations for the clim library.</p>
+  <p>
+  the functions exhibit several forms:
+ <dl><dt>.og.::<i>operation</i></dt><dd>include in intial specializer. they are invoked from interface functions to perform operations for the given context.</dd>
+     <dt>clim-<i>operation</i></dt><dd>require an sheet</dd>
+     <dt>cg-<i>operation</i></dt><dd>are internal functions and utilities which are specific to clim but do not depend on the context.</dd>
+     <dt>context-<i>operation</i></dt><dd>require a clim context and implement components things like ndc-specific methods</dd>
+     </dl></p>
+  </DESCRIPTION>
+ <CHRONOLOGY>
+  <DELTA DATE='20030911' AUTHOR='james.anderson@setf.de' >
+   </DELTA>
+  </CHRONOLOGY>
+ </DOCUMENTATION>
+
+
+(pushnew :og.assert-types *features*)
+
+(in-package :de.setf.object-graphics.implementation)
+
+(defParameter *clim-medium* nil)
+(defParameter *clim-sheet* nil)
+
+(defParameter *clim-drawing-mode* '(:stroke)
+  "the combined default drawing mode. comprises the path mode, effect, and fill rule")
+
+(defparameter *clim-path-mode* :stroke
+  "the clim path mode designator")
+(defParameter *clim-path-effect* :paint
+  "the clim path effect designator")
+(defParameter *clim-path-rule* :winding)
+
+(defParameter *clim-ink* clim:+foreground-ink+
+  "the effective ink used in drawing operations. initial value +foreground-ink+.")
+(defParameter *clim-agent* nil
+  "the current agent, from which a basic design is computed, which is then combined with an optional opacity to produce the value bound to *clim-ink*.")
+(defParameter *clim-mark-agent* nil
+  "the effective foreground color used in drawing ioperations. initially the medium foreground color.")
+
+
+(defParameter *clim-color-mode* :opaque)
+(defParameter *clim-opacity* nil)
+
+(defParameter *clim-font* '("monaco" 10))
+
+
+;;;
+;;; class
+
+(defClass clim-context (ndc-transform-context single-sided-projection-context)
+  ((arc-ndc :initform 'clim-arc-ndc :allocation :instance)
+   (line-ndc :initform 'clim-line-ndc :allocation :instance)
+   (raster-ndc :initform 'clim-raster-ndc :allocation :instance)
+   (rectangle-ndc :initform 'clim-rectangle-ndc :allocation :instance)
+   (text-ndc :initform 'clim-text-ndc :allocation :instance)
+   (view
+    :initform nil :reader context-ndc-context
+    :documentation
+    "bound to a clim sheet."))
+  (:documentation
+   "the contet for clim operations"))
+
+(defmethod mcl-clim::ccl-decode-ink ((ink (eql clim:+flipping-ink+)) (medium t))
+  #$SrcXor)
+  
+(defmethod mcl-clim::ccl-decode-ink ((ink CLIM-UTILS:FLIPPING-INK) (medium t))
+  #$SrcXor)
+
+
+;;;
+;;; context binding
+
+
+(defMethod call-with-projection-context
+           ((function function) (context clim-context)
+            &key
+            &allow-other-keys)
+  (let* ((*clim-sheet* (context-view context))
+         (*clim-medium* (clim:sheet-medium *clim-sheet*))
+         (*clim-path-mode* *clim-path-mode*)
+         (*clim-path-effect* *clim-path-effect*)
+         (*context-path-rule* *context-path-rule*)
+         (*context-empty-agent* (clim:medium-background *clim-medium*))
+         (*clim-agent* (clim:medium-foreground *clim-medium*))
+         (*context-mark-agent* *clim-agent*)
+         (*context-fill-agent* *clim-agent*)
+         (*clim-ink* (clim:medium-ink *clim-medium*))
+         )
+    (call-next-method)))
+
+
+(defMethod define-font ((context clim-context) font-spec
+                        &optional (name  (font-spec-name font-spec))
+                        &aux family face size)
+  (setf family (find-if #'string font-spec))
+  (setf face (find-if #'keywordp font-spec))
+  (setf size (find-if #'integerp font-spec))
+  (unless (and family size)
+    (error "name and size required: ~s." font-spec))
+
+  (setf (context-get context nil name) (clim:make-text-style family face size))
+  name)
+
+(defMethod get-font ((context clim-context) name)
+  (context-get context nil name))
+
+
+<p>
+<dt>projection for geometric constituents</dt>
+<dd>
+these functions implement the normalized device coordinate operations for the basic geometric constituents to project them in terms of elementary clim drawing operations. each accepts locations, additional dimension, and properties appropriate for the respective geometry. in addition each accepts an optional projection aspect sequence which is a sequence of manifestation and/or transformation specifications or a function. the locations are passed as double-float location vectors.<br/>
+the functions manifest a common structure. each has a core which draws, erases, inverts the figure according to the current drawing mode. this core uses the abstract function clim-inflect-geometry to iterate over the current drawing modes and establish their clim-specific effects within the context of the more general call-with-projection-variables which processes the projection aspects.
+</dd></p>
+
+;;; 
+;;; generic display property inflection for geometric constituents
+;;;
+
+(defun clim-inflect-geometry (geometry-operator)
+  "iterates over the current binding for *context-drawing-mode* to assert the clim-specific display properties."
+  (if *context-drawing-mode*
+    (let* ((path-constituents nil)
+           (path-effect nil)
+           (path-rule nil)
+           (path-agent nil)
+           (modifications #x1000))
+      (flet ((do-call ()
+               (funcall geometry-operator
+                        (if path-agent path-agent
+                            (if (eq path-effect :erase) *context-empty-agent*
+                                (if (eq path-constituents :surfaces)
+                                  *context-fill-agent*
+                                  *context-mark-agent*)))
+                        (if path-constituents path-constituents *context-path-constituents*)
+                        (if path-effect path-effect *context-path-effect*)
+                        (if path-rule path-rule *context-path-rule*))
+               (setf modifications 0)))
+        (flet ((assert-property (property)
+                 (case property
+                   ;; rendering effects
+                   ((:surfaces :lines :points)
+                    (unless (eq path-constituents property)
+                      (unless (zerop (logand modifications #x100)) (do-call))
+                      (setf modifications (logior modifications #x100)
+                            path-constituents property)))
+                   ((:erase :invert :paint)
+                    (unless (eq path-effect property)
+                      (unless (zerop (logand modifications #x01)) (do-call))
+                      (setf modifications (logior modifications #x001)
+                            path-effect property)))
+                   ((:winding :even-odd)
+                    (unless (eq path-rule property)
+                      (setf modifications (logior modifications #x010)
+                            path-rule property)))
+                   ((nil)
+                    (do-call))
+                   (t (setf path-agent (etypecase property
+                                         (vector property)
+                                         (location-rgba property)
+                                         (raster (context-raster-design *projection-context* property))))))))
+          (etypecase *context-drawing-mode*
+            (cons (dolist (property *context-drawing-mode*) (assert-property property)))
+            (vector (dotimes (i (length *context-drawing-mode*))
+                      (assert-property (aref *context-drawing-mode* i))))
+            (null )
+            (keyword (assert-property *context-drawing-mode*)))
+          (unless (zerop modifications) (do-call)))))
+    ;; w/o local inflections
+    (funcall geometry-operator
+             (if (eq *context-path-effect* :erase)
+               *context-empty-agent*
+                 (if (eq *context-path-constituents* :surfaces)
+                   *context-fill-agent*
+                   *context-mark-agent*))
+             *context-path-constituents*
+             *context-path-effect*
+             *context-path-rule*)))
+
+
+;;;
+;;; lines
+
+(defun clim-line-ndc (sheet ndc-l1 ndc-l2 aspects)
+  "draw a line given the ndc endpoints"
+  (declare (type short-float x1 y1 x2 y2))
+  #+og.assert-types (progn (assert-type sheet clim:sheet)
+                           (assert-types (ndc-l1 ndc-l2) location-vector)
+                           (assert-type aspects aspect-specification))
+  (flet ((line-geometry (path-agent path-constituents path-effect path-rule)
+           (declare (ignore path-rule))
+           (flet ((as-stroke () (clim:draw-line* sheet (aref ndc-l1 0) (aref ndc-l1 1) (aref ndc-l2 0) (aref ndc-l2 1)))
+                  (as-points () (clim:draw-point* sheet (aref ndc-l1 0) (aref ndc-l1 1))
+                                (clim:draw-point* sheet (aref ndc-l2 0) (aref ndc-l2 1))))
+             (declare (dynamic-extent #'as-stroke #'as-points))
+             (ecase path-constituents
+               ((:surfaces :lines) (setf path-constituents #'as-stroke))
+               (:points (setf path-constituents #'as-points)))
+             (case path-effect
+               ((:paint :erase)
+                (clim-set-ink sheet path-agent)
+                (funcall path-constituents))
+               (:invert (clim-set-ink sheet
+                                    (clim:make-flipping-ink path-agent *context-empty-agent*))
+                      (funcall path-constituents))))))
+    (declare (dynamic-extent #'line-geometry))
+    (flet ((inflect-line-geometry () (clim-inflect-geometry #'line-geometry)))
+      (declare (dynamic-extent #'inflect-line-geometry))
+      (call-with-projection-variables #'inflect-line-geometry aspects))))
+
+
+;;;
+;;; rectangle
+
+(defMacro with-coordinate-list ((binding &rest locations) &rest body)
+  `(let ((,binding (nconc ,@(mapcar #'(lambda (lv) `(list (aref ,lv 0) (aref ,lv 1))) locations))))
+        ,@body))
+
+(defun clim-rectangle-ndc (sheet ndc-l1 ndc-l2 ndc-l3 ndc-l4 &optional aspects)
+  (declare (type short-float x1 y1 x2 y2 x3 y3 x4 y4))
+  #+og.assert-types (progn (assert-type sheet clim:sheet)
+                           (assert-types (ndc-l1 ndc-l2 ndc-l3 ndc-l4) location-vector)
+                           (assert-type aspects aspect-specification))
+  (with-coordinate-list (coordinates ndc-l1 ndc-l2 ndc-l3 ndc-l4)
+    (flet ((rectangle-geometry (path-agent path-constituents path-effect path-rule)
+             (declare (ignore path-rule))
+             (flet ((as-points () (clim:draw-points* sheet coordinates))
+                    (as-surfaces () (clim:draw-polygon* sheet coordinates :filled t))
+                    (as-lines () (clim:draw-polygon* sheet coordinates :filled nil)))
+               (declare (dynamic-extent #'as-surfaces #'as-lines #'as-points))
+               (ecase path-constituents
+                 (:surfaces (setf path-constituents #'as-surfaces))
+                 (:lines (setf path-constituents #'as-lines))
+                 (:points (setf path-constituents #'as-points)))
+               (case path-effect
+                 ((:paint :erase)
+                  (clim-set-ink sheet path-agent)
+                  (funcall path-constituents))
+                 (:invert (clim-set-ink sheet (clim:make-flipping-ink path-agent *context-empty-agent*))
+                        (funcall path-constituents))))))
+      (declare (dynamic-extent #'rectangle-geometry))
+      (flet ((inflect-rectangle-geometry () (clim-inflect-geometry #'rectangle-geometry)))
+        (declare (dynamic-extent #'inflect-rectangle-geometry))
+        (call-with-projection-variables #'inflect-rectangle-geometry aspects)))))
+
+
+;;
+;; polygon
+
+(defMethod .og.::poly ((context clim-context) locations mode &optional aspects)
+  "transform a sequence of points to ndc coordinates and render a polygon.
+   iff a location is a location-ndc, then the coordinates are not transformed"
+  #+og.assert-types (progn (assert-type *clim-sheet* 'clim:sheet)
+                           (assert-type locations sequence)
+                           (assert-type aspects aspect-specification))
+  (let ((get-next-location nil)
+        (location-count (length locations))
+        (last-index -1)
+        (*context-drawing-mode* (or mode *context-drawing-mode*)))
+    (declare (type fixnum last-index location-count))
+    (when (> location-count 0)
+      (flet ((next-list-location ()
+               (locally (declare (type list locations))
+                 (pop locations)))
+             (next-vector-location ()
+               (locally (declare (type vector locations))
+                 (when (< (incf last-index) location-count)
+                   (aref locations last-index)))))
+          (declare (dynamic-extent #'next-list-location #'next-vector-location))
+          (etypecase locations
+            (cons (setf get-next-location #'next-list-location))
+            (vector (setf get-next-location #'next-vector-location)))
+          (with-location-vectors ((ndc-location))
+            (let* ((location nil)
+                   (coordinate-count (* location-count 2)) 
+                   (coordinates (make-list coordinate-count))
+                   (next-coordinates coordinates))
+              (declare (type fixnum coordinate-count))
+              (loop (typecase (setf location (funcall get-next-location))
+                      (null (return))
+                      (fixnum (setf (first next-coordinates) (point-h location)
+                                    (second next-coordinates) (point-v location)))
+                      (location-port (setf (first next-coordinates) (location-x location)
+                                           (second next-coordinates) (location-y location)))
+                      (t (location-transform *context-transform* location ndc-location)
+                         (setf (first next-coordinates) (aref ndc-location 0)
+                               (second next-coordinates) (aref ndc-location 1))))
+                    (setf next-coordinates (nthcdr 2 next-coordinates)))
+              (flet ((poly-geometry (path-agent path-constituents path-effect path-rule)
+                       (declare (ignore path-rule))
+                       (flet ((as-points () (clim:draw-points* *clim-sheet* coordinates))
+                              (as-surfaces () (clim:draw-polygon* *clim-sheet* coordinates :filled t
+                                                                  :closed nil))
+                              (as-lines () (clim:draw-polygon* *clim-sheet* coordinates :filled nil
+                                                                  :closed nil)))
+                         (declare (dynamic-extent #'as-surfaces #'as-lines #'as-points))
+                         (ecase path-constituents
+                           (:surfaces (setf path-constituents #'as-surfaces))
+                           (:lines (setf path-constituents #'as-lines))
+                           (:points (setf path-constituents #'as-points)))
+                         (case path-effect
+                           ((:paint :erase)
+                            (clim-set-ink *clim-sheet* path-agent)
+                            (funcall path-constituents))
+                           (:invert (clim-set-ink *clim-sheet*
+                                                (clim:make-flipping-ink path-agent *context-empty-agent*))
+                                  (funcall path-constituents))))))
+                (declare (dynamic-extent #'poly-geometry))
+                (flet ((inflect-poly-geometry () (clim-inflect-geometry #'poly-geometry)))
+                  (declare (dynamic-extent #'inflect-poly-geometry))
+                  (call-with-projection-variables #'inflect-poly-geometry aspects)))))))))
+
+
+
+;;;
+;;; arc
+
+(defun clim-arc-ndc (sheet location radius start end direction &optional aspects)
+  "draw a rectangle given the 2d coordinates"
+  #+og.assert-types (progn (assert-type sheet clim:sheet)
+                           (assert-type location location-vector)
+                           (assert-type aspects aspect-specification))
+  (let ((radiusarg (* 1.0s0 radius))
+        (xarg (aref location 0))
+        (yarg (aref location 1)))
+    (ecase direction
+      (:counterclockwise)
+      (:clockwise (rotatef start end)))
+    (flet ((arc-geometry (path-agent path-constituents path-effect path-rule)
+             (declare (ignore path-rule))
+             (flet ((as-lines ()  (clim:draw-circle* sheet xarg yarg radiusarg :start-angle start :end-angle end :filled nil))
+                    (as-surfaces () (clim:draw-circle* sheet xarg yarg radiusarg :start-angle start :end-angle end :filled t))
+                    (as-points () (clim:draw-point* sheet xarg yarg)
+                                  (clim:draw-point* sheet (+ xarg (* radius (cos start))) (+ yarg (* radius (sin start))))
+                                  (clim:draw-point* sheet (+ xarg (* radius (cos end))) (+ yarg (* radius (sin end))))))
+               (declare (dynamic-extent #'as-surfaces #'as-lines #'as-points))
+               (ecase path-constituents
+                 (:surfaces (setf path-constituents #'as-surfaces))
+                 (:lines (setf path-constituents #'as-lines))
+                 (:points (setf path-constituents #'as-points)))
+               (case path-effect
+                 ((:paint :erase)
+                  (clim-set-ink sheet path-agent)
+                  (funcall path-constituents))
+                 (:invert (clim-set-ink sheet (clim:make-flipping-ink path-agent *context-empty-agent*))
+                        (funcall path-constituents))))))
+      (declare (dynamic-extent #'arc-geometry))
+      (flet ((inflect-arc-geometry () (clim-inflect-geometry #'arc-geometry)))
+        (declare (dynamic-extent #'inflect-arc-geometry))
+        (call-with-projection-variables #'inflect-arc-geometry aspects)))))
+
+   
+
+;;;
+;;; text
+
+(defun clim-text-ndc (sheet location text &optional font aspects)
+  #+og.assert-types (progn (assert-type *clim-sheet* 'clim:sheet)
+                           (assert-type location location-vector)
+                           (assert-type text string)
+                           (assert-type aspects aspect-specification))
+  (flet ((text-geometry ()
+           ;; use either the erase or the mark agent - text is never manifested as a surface
+           (clim-set-ink sheet (if (eq *context-path-effect* :erase) *context-empty-agent* *context-mark-agent*))
+           (clim:draw-text* sheet text (aref location 0) (aref location 1)
+                            :text-style (and font (setf font (get-font *projection-context* font))))))
+    (declare (dynamic-extent #'text-geometry))
+    (call-with-projection-variables #'text-geometry aspects)))
+
+;;;
+;;; raster
+
+
+(defun clim-raster-ndc (sheet location size raster &optional aspects)
+  #+og.assert-types (progn (assert-type *clim-sheet* 'clim:sheet)
+                           (assert-types (location size) location-vector)
+                           (assert-type raster raster)
+                           (assert-type aspects aspect-specification))
+  ;; nb clim applies the width to the pixmap and does not permit scaled copies
+  (let ((pixmap (sample-projection raster *projection-context*)))
+    (flet ((raster-geometry ()
+             (clim:copy-from-pixmap pixmap 0 0 (aref size 0) (aref size 0)
+                                    (clim:sheet-medium sheet) (aref location 0) (aref location 1))))
+      (declare (dynamic-extent #'raster-geometry))
+      (call-with-projection-variables #'raster-geometry aspects))))
+      
+
+(defMethod terminate-relation ((owner raster) (key (eql 'clim-silica:pixmap)) pixmap)
+  (when (typep pixmap 'CLIM-SILICA:PIXMAP)
+    (clim:deallocate-pixmap pixmap)))
+
+
+(defmethod sample-introjection ((raster raster) (context clim-context))
+  )
+
+(defmethod sample-projection ((raster raster) (context clim-context))
+  (let ((sample-projection (context-get context raster 'clim-silica:pixmap)))
+    (unless (and sample-projection
+                 (test-projection-generation raster context))
+      (let* ((size (sample-size raster))
+             (color-table (make-hash-table :test #'equal)))
+        ;; there does not appear to be a way to reuse the pixmaps
+        (when (typep sample-projection 'CLIM-SILICA:PIXMAP)
+          (clim:deallocate-pixmap sample-projection))
+        (setf sample-projection
+              (clim:with-output-to-pixmap (pixmap-sheet *clim-sheet* :width (point-h size) :height (point-v size))
+                (dotimes (i (point-v size))
+                  (dotimes (j (point-h size))
+                    (flet ((filter (datum)
+                             (let ((sample-ink (gethash datum color-table)))
+                               (unless sample-ink
+                                 (setf sample-ink (setf (gethash datum color-table)
+                                                        (etypecase datum
+                                                          (fixnum  (clim:make-gray-color (/ datum 65535)))
+                                                          (float  (clim:make-gray-color datum))
+                                                          (list (apply #'clim:make-rgb-color datum))))))
+                               (clim:draw-point* pixmap-sheet j i :ink sample-ink))))
+                      (declare (dynamic-extent #'filter))
+                      (sample-filter raster #'filter i j)))))))
+      (setf (context-get context raster 'clim-silica:pixmap) sample-projection))
+    (set-projection-generation raster context)
+    sample-projection))
+
+
+
+;;; general utilities
+;;;
+
+
+(defun clim-fill-view (sheet agent)
+  ;; nb. medium-clear-area does not show up in the output record.
+  (multiple-value-bind (width height) (clim:window-inside-size sheet)
+    (let* ((medium (clim:sheet-medium sheet))
+           (untransform (clim:invert-transformation (clim:medium-transformation medium))))
+      (multiple-value-bind (ndc-x-origin ndc-y-origin)
+                           (clim:transform-position untransform 0 0)
+        (multiple-value-bind (ndc-width ndc-height)
+                             (clim:transform-position untransform width height)
+          (clim:draw-rectangle* medium ndc-x-origin ndc-y-origin ndc-width ndc-height
+                                :filled t :ink (clim-agent-ink agent)))))))
+
+
+(defMethod context-erase ((context clim-context))
+  (clim:clear-output-record (clim:stream-output-history *clim-sheet*))
+  (clim-fill-view (context-view context) *context-empty-agent*))
+
+(defMethod context-mark ((context clim-context) &optional (agent *context-mark-agent*))
+  (clim-fill-view (context-view context) agent))
+
+
+
+
+<p>
+<dt>properties</dt>
+<dd>
+colors are managed as immutable clim:color instances.
+they are created with clim:make-rgb-color. onlt the background color is set directly.
+the other are set as used in the geometry operations. 
+no attempt is made to resource them when managing temporary state.</dd></p>
+
+
+(defMethod context-raster-design ((context clim-context) raster)
+  "generate a design to use as ink from an argument a raster"
+  (or (context-get context raster 'clim:design)
+      (let* ((design nil)
+             (sample-size (sample-size raster))
+             (color-map (make-hash-table :test #'equal))
+             (color-table (make-array (point-h design) :element-type '(unsigned-byte 32)
+                                      :adjustable t :fill-pointer 0))
+             (design-array (make-array (list (point-h sample-size) (point-v sample-size))
+                                       :element-type '(unsigned-byte 32)
+                                       :initial-element 0)))
+        (declare (dynamic-extent color-table))
+        (dotimes (i (point-v sample-size))
+          (dotimes (j (point-h sample-size))
+            (flet ((filter (&rest rgb-args)
+                     (declare (dynamic-extent rgb-args))
+                     (let ((sample-index (gethash rgb-args color-map)))
+                       (unless sample-index
+                         (setf rgb-args (copy-list rgb-args))
+                         (setf sample-index (length color-table))
+                         (destructuring-bind (r g b) rgb-args
+                           (setf (gethash rgb-args color-map) sample-index)
+                           (vector-push-extend (clim:make-rgb-color r g b) color-map)))
+                       (setf (aref design-array i j) sample-index))))
+              (declare (dynamic-extent #'filter))
+              (sample-filter raster #'filter i j))))
+        (setf design (clim:make-rectangular-tile (clim:make-pattern design-array color-table)
+                                                 (point-h sample-size) (point-v sample-size)))
+        (setf (context-get context raster 'clim:design) design))))
+
+;;;
+;;; drawing mode management is that of a single-sided-aspect-context
+
+(defparameter *clim-colors* (make-array 0 :fill-pointer 0 :adjustable t)
+  "holds clim color instances instances")
+
+(defClass clim-color (clim-utils:rgb-color)
+  ((clim-utils::red :accessor color-red :initarg :red)
+   (clim-utils::green :accessor color-green :initarg :green)
+   (clim-utils::blue :accessor color-blue :initarg :blue)
+   (alpha :accessor color-alpha :initarg :alpha)))
+
+(defun get-clim-color (r g b a)
+  (if (and *clim-colors* (> (fill-pointer *clim-colors*) 0))
+    (let ((color (vector-pop *clim-colors*)))
+      (setf (color-red color) r
+            (color-green color) g
+            (color-blue color) b
+            (color-alpha color) a)
+      color)
+    (make-instance 'clim-color :red r :green g :blue b :alpha a)))
+
+(defun return-clim-color (color)
+  (when (and (typep color 'clim-color) *clim-colors*)
+    (vector-push-extend color *clim-colors*)))
+
+
+(macrolet ((define-agent (stem)
+             (setf stem (string stem))
+             (let ((set-function (intern (concatenate 'string "CLIM-" stem "-AGENT*4")))
+                   (save-method (intern (concatenate 'string "SAVE-" stem "-AGENT") :.og.))
+                   (method (intern (concatenate 'string stem "-AGENT") :.og.))
+                   (method*3 (intern (concatenate 'string stem "-AGENT*3") :.og.))
+                   (method*4 (intern (concatenate 'string stem "-AGENT*4") :.og.))
+                   (context-var (intern (concatenate 'string "*CONTEXT-" stem "-AGENT*"))))
+               `(progn
+                  (defun ,set-function (r g b a)
+                    ;; makes a new color and binds it to both the context variable
+                    ;; and the quickdraw-specific variable
+                    (with-short-float-intensity-variables (r g b a)
+                      (setq ,context-var (get-clim-color r g b a))))
+                  
+                  (defMethod ,method*3 ((context clim-context) r g b)
+                    (,set-function r g b 1.0s0))
+                  
+                  (defMethod ,method*4 ((context clim-context) r g b &optional a)
+                    ; optional to allow call from agent w/o length check
+                    (,set-function r g b (or a 1.0s0)))
+                  
+                  (defMethod ,method ((context clim-context) color &optional g b a)
+                    "examine the arguments to distinguish rgb intensities (spread or as location) from a raster pattern, and a symbolic color designator."
+                    (etypecase color
+                      (number
+                       (,set-function color g b (or a 1.0s0)))
+                      (cons
+                       (destructuring-bind (r g b &optional a) (if (symbolp (first color)) (rest color) color)
+                         (,set-function r g b (or a 1.0s0))))
+                      ((or vector location-2)
+                       (with-location-coordinates (((r g b a) color))
+                         (,set-function r g b a)))
+                      (clim-color
+                       (,set-function (color-red color) (color-green color) (color-blue color) (color-alpha color)))
+                      (clim:color
+                       (setq ,context-var color))
+                      (raster
+                       (setf ,context-var color))
+                      (symbol
+                       ;; reuse the other color values.
+                       (case color
+                         (:mark (,method context *context-mark-agent*))
+                         (:fill (,method context *context-fill-agent*))
+                         (:empty (,method context *context-empty-agent*))
+                         (t (if (and (boundp color)
+                                       (not (eq color (setq color (symbol-value color)))))
+                              (,method context color)
+                              (error "invalid agent: ~s" color)))))))
+                  
+                  (defMethod ,save-method ((context clim-context))
+                    "save the current agent. as these are supplied by the application, no resourcing is done"
+                    (push-projection-variables #'(lambda (context agent-designator)
+                                                 (,method context agent-designator)
+                                                 (if (short-location-vector-p agent-designator)
+                                                   (return-short-location-vector agent-designator)))
+                                             context ,context-var))))))
+  (define-agent fill)
+  (define-agent mark)
+  (define-agent empty))
+
+(defun clim-set-ink (sheet path-agent)
+  (unless (equal path-agent *clim-agent*)
+    (setq *clim-agent* path-agent)
+    (setq *clim-ink* (clim-agent-ink path-agent))
+    (setf (clim:medium-ink sheet) *clim-ink*)))
+
+(defun clim-agent-ink (path-agent)
+  (etypecase path-agent
+    (null (warn "null agent") clim:+foreground-ink+)
+    (clim:design            ; encompasses clim:rgb-color
+     path-agent)
+    (vector (with-location-coordinates (((r g b) path-agent))
+              (clim:make-rgb-color r g b)))
+    (location-rgba (clim:make-rgb-color  (rgba-r path-agent) (rgba-g path-agent) (rgba-b path-agent)))
+    (raster (clim-agent-ink (context-raster-design *projection-context* path-agent)))))
+
+
+(defun clim-agent-ink (path-agent)
+  (etypecase path-agent
+    (null (warn "null agent") clim:+foreground-ink+)
+    (clim:design            ; encompasses clim:rgb-color
+     (typecase *clim-opacity*
+       (clim:opacity (clim:compose-over *clim-opacity* path-agent))
+       (t path-agent)))
+    (vector (with-location-coordinates (((r g b a) path-agent))
+              (let ((ink (clim:make-rgb-color r g b)))
+                (typecase *clim-opacity*
+                  (clim:opacity (clim:compose-over *clim-opacity* ink))
+                  (keyword (case *clim-opacity*
+                             (:src-alpha (clim:compose-over (clim:make-opacity a) ink))
+                             (:one-minus-src-alpha (clim:compose-over (clim:make-opacity (- 1 a)) ink))
+                             (t ink)))
+                  (number (clim:compose-over (clim:make-opacity *clim-opacity*) ink))
+                  (t path-agent)))))
+    (location-rgba (let ((ink (clim:make-rgb-color  (rgba-r path-agent) (rgba-g path-agent) (rgba-b path-agent))))
+                     (typecase *clim-opacity*
+                       (clim:opacity (clim:compose-over *clim-opacity* path-agent))
+                       (keyword (case *clim-opacity*
+                                  (:src-alpha (clim:compose-over (clim:make-opacity (rgba-a path-agent)) ink))
+                                  (:one-minus-src-alpha (clim:compose-over (clim:make-opacity (- 1 (rgba-a path-agent))) ink))
+                                  (t ink)))
+                       (number (clim:compose-over (clim:make-opacity *clim-opacity*) ink))
+                       (t ink))))
+    (raster (clim-agent-ink (context-raster-design *projection-context* path-agent)))))
+
+;;;
+;;; color mode
+
+(defMethod context-set-color-mode ((context clim-context) mode &rest args)
+  "core graphics supports a alpha combination factor for images?"
+  (declare (dynamic-extent args))
+  (destructuring-bind (&optional source-factor destination-factor) args
+    (declare (ignore destination-factor))
+    (ecase mode
+      ((:source :opaque)
+       (setq *clim-color-mode* :opaque
+             *clim-opacity* nil))
+      ((:blend :alpha)
+       (etypecase source-factor
+         (number
+          (with-coerced-variables ((short-float source-factor))
+            (setf *clim-color-mode* :blend
+                  *clim-opacity* (clim:make-opacity source-factor))))
+         (keyword
+          (setf *clim-color-mode* :blend
+                *clim-opacity* source-factor)))))))
+
+(defMethod .og.::save-color-mode ((context clim-context))
+  (push-projection-variables #'(lambda (mode factor)
+                               (setq *clim-color-mode* mode
+                                     *clim-opacity* factor))
+                           *clim-color-mode* *clim-opacity*))
+  
+
+<p>
+<dt>coordinate system transformations</dt>
+<dd>the primitive clim display operations are defined in normalized device coordinates.
+    the abstract class ndc-transform-context includes methods which transform coordinates
+    from object/world to ndc coordinates and which manage the coordinate-system operations.
+    the clim-specific context requires methods for managing the view transform only. </dd>
+</p>
+
+(defMethod context-view-transform ((context clim-context))
+  "refresh the matrix from the cg context when it is active. otherwise use the current value"
+  (let ((matrix (call-next-method)))
+    (declare (type transform-matrix matrix))
+    (when *clim-medium*
+      (let ((clim-transform (clim:medium-transformation *clim-medium*)))
+        (etypecase clim-transform
+          (CLIM-UTILS:IDENTITY-TRANSFORMATION
+           (matrix-identity matrix))
+          (CLIM-UTILS:STANDARD-TRANSFORMATION
+           (with-slots (([0.0] CLIM-UTILS::MXX)
+                        ([0.1] CLIM-UTILS::MXY)
+                        ([1.0] CLIM-UTILS::MYX)
+                        ([1.1] CLIM-UTILS::MYY)
+                        ([2.0] CLIM-UTILS::TX)
+                        ([2.1] CLIM-UTILS::TY)) clim-transform
+             (setf (aref matrix 0 0) (* 1.0d0 [0.0])
+                   (aref matrix 0 1) (* 1.0d0 [0.1])
+                   (aref matrix 1 0) (* 1.0d0 [1.0])
+                   (aref matrix 1 1) (* 1.0d0 [1.1])
+                   (aref matrix 3 0) (* 1.0d0 [2.0])
+                   (aref matrix 3 1) (* 1.0d0 [2.1])))))))
+    matrix))
+
+(defMethod context-set-view-transform ((context clim-context) op &rest args)
+  "the view transform operations are passed through to the core graphics functions.
+   the arguments vary by operation: scaling and translation use two of three, rotation one of three, catenation and setting either a list of 16 or 6 metrix entries or a six-entry affine transform matrix."
+  (flet ((call-with-transform (function transform-args)
+           (etypecase (first transform-args)
+             (number (ecase (length transform-args)
+                       (16 (destructuring-bind ([0.0] [0.1] [0.2] [0.3]
+                                                      [1.0] [1.1] [1.2] [1.3]
+                                                      [2.0] [2.1] [2.2] [2.3]
+                                                      [3.0] [3.1] [3.2] [3.3]) transform-args
+                             (declare (ignore [0.2] [0.3] [1.2] [1.3] [2.0] [2.1] [2.2] [2.3] [3.2] [3.3]))
+                             (funcall function (clim:make-transformation [0.0] [0.1] [1.0] [1.1] [3.0]  [3.1]))))
+                       (6 (destructuring-bind ([0.0] [0.1] [1.0] [1.1] [2.0] [2.1]) transform-args
+                            (funcall function (clim:make-transformation [0.0] [0.1] [1.0] [1.1] [2.0]  [2.1]))))))
+             (array (let ((matrix (first args)))
+                      (ecase (array-dimension matrix 0)
+                        (3 (funcall function (clim:make-transformation (aref matrix 0 0) (aref matrix 0 1)
+                                                                       (aref matrix 1 0) (aref matrix 1 1)
+                                                                       (aref matrix 2 0) (aref matrix 2 1))))
+                        (4 (funcall function (clim:make-transformation (aref matrix 0 0) (aref matrix 0 1)
+                                                                       (aref matrix 1 0) (aref matrix 1 1)
+                                                                       (aref matrix 3 0) (aref matrix 3 1))))))))))
+    (ecase op
+      (:scale (destructuring-bind (x &optional y z) args
+                (spread-optional-coordinates_ x y z) z
+                (setf (clim:medium-transformation *clim-medium*)
+                      (clim:compose-transformation-with-scaling (clim:medium-transformation *clim-medium*) x y (clim:make-point 0 0)))))
+      (:translate (destructuring-bind (x y z) args
+                    (spread-optional-coordinates_ x y z) z
+                    (setf (clim:medium-transformation *clim-medium*)
+                      (clim:compose-transformation-with-translation (clim:medium-transformation *clim-medium*) x y))))
+      (:rotate (destructuring-bind (x &optional y z) args
+                 (declare (ignore y))
+                 (ecase x
+                   (number (unless (numberp z) (setf z x)))
+                   (location-3 (setf z (Location-z x))))
+                 (setf (clim:medium-transformation *clim-medium*)
+                       (clim:compose-transformation-with-rotation (clim:medium-transformation *clim-medium*) z))))
+      (:catenate (call-with-transform #'(lambda (transform)
+                                          (setf (clim:medium-transformation *clim-medium*)
+                                                (clim:compose-transformations (clim:medium-transformation *clim-medium*) transform)))
+                                      args))
+      (:set (call-with-transform #'(lambda (transform)
+                                     (setf (clim:medium-transformation *clim-medium*) transform))
+                                 args))
+      (:clear (setf (clim:medium-transformation *clim-medium*) clim:+identity-transformation+)))))
+
+
+
+
+:eof
+

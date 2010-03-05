@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.object-graphics.implementation; Base: 10; Lowercase: Yes -*-
+;;; -*- Mode: LISP; Syntax: Common-lisp; Package: de.setf.graphics.implementation; Base: 10; Lowercase: Yes -*-
 
 
 (in-package :de.setf.graphics.implementation)
@@ -33,7 +33,7 @@
 (defparameter *test-screen-size* (make-point 0 0))
 (defparameter *test-view-size* (make-point 320 320))
 (defparameter *test-view-placement* :tiled)
-(defparameter *test-sleep* 0.1)
+(defparameter *test-sleep* 0.0)
 (defparameter *test-count* 10)
 (defun minimum-test-count () (or *test-count* 10))
 (defparameter *test-raster* nil)
@@ -366,10 +366,7 @@
           (with-projection-variables
             (lambda () )
             (fill-agent (aref colors i))
-            (rectangle*2 min min max max))
-          (flush-view)
-          (unless (eq *projection-context* *ipc*) (sleep *test-sleep*))
-          ))))
+            (rectangle*2 min min max max))))))
   t)
 
 (og::test og.projection.translated-rectangles-test.1
@@ -477,7 +474,9 @@
   (sampler :break-p nil
            :clear-p #'(lambda ()
                         (stroke-agent 1.0 1.0 1.0)
-                        (raster*2 -0.9 -0.9 0.9 0.9 *life-raster*)))
+                        (raster*2 -0.9 -0.9 0.9 0.9 *life-raster*)
+                        ;; (line-pattern 1 #b1010101010101010)
+                        (rectangle*2 -0.9 -0.9 0.9 0.9)))
   t)
 
 (og::test og.projection.sampler.1
@@ -500,14 +499,15 @@
       (sampler :clear-p #'(lambda ()
                             (clear-view)
                             (stroke-agent 1.0 1.0 1.0)
-                            (raster*2 -0.7 -0.7 0.7 0.7 *life-raster*)))
+                            (raster*2 -0.9 -0.9 0.9 0.9 *life-raster*)
+                            (rectangle*2 -0.9 -0.9 0.9 0.9)))
       (flush-view)
       (next-generation *life-raster*)
       (when sleep (sleep sleep))))
   t)
 
 (og::test og.projection.sampler.2
-  (test-sampler-animation :sleep nil))
+  (test-sampler-animation))
 
 
 (og::test (og.version :clear-p nil)

@@ -3,7 +3,7 @@
 (in-package :de.setf.graphics.implementation)
 
 (document :file
- (description "This file defines test for the OpenGL interface for the 'de.setf.graphics' library.")
+ (description "This file defines tests for the OpenGL interface for the 'de.setf.graphics' library.")
  (copyright
   "Copyright 2010 [james anderson](mailto:james.anderson@setf.de) All Rights Reserved"
   "'de.setf.amqp' is free software: you can redistribute it and/or modify it under the terms of version 3
@@ -319,10 +319,10 @@
 ;;;
 ;;; extended primitive tests
 
-(defClass opengl-test-window (context-window)
+(defclass opengl-test-window (context-window)
   ((draw-function :initform nil :accessor window-draw-function)))
 
-(defMethod ccl:view-draw-contents ((view opengl-test-window))
+(defmethod ccl:view-draw-contents ((view opengl-test-window))
   (with-slots (draw-function) view
     (when draw-function (funcall draw-function view))))
 

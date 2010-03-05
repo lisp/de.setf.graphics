@@ -5,6 +5,7 @@
 
 
 (document "This file defines combination operators for locations for the 'de.setf.graphics' library."
+
   (copyright "Copyright 2010 [james anderson](mailto:james.anderson@setf.de) All Rights Reserved"
              "'de.setf.graphics' is free software: you can redistribute it and/or modify it under the terms of version 3
   of the GNU Affero General Public License as published by the Free Software Foundation.
@@ -46,7 +47,7 @@
     (intern (concatenate 'string (string prefix) (symbol-name op))
             :de.setf.object-graphics))
 
-  (defMacro define-location-binary-op
+  (defmacro define-location-binary-op
             (op
              &key (point-op
                         `(lambda (p1 p2)
@@ -155,7 +156,7 @@
          )
        (setf (get 'location ',op) ',interface-op)))
   
-  (defMacro define-location-unary-op
+  (defmacro define-location-unary-op
             (op
              &optional (point-op `(lambda (p1)
                                     (make-point (,op (point-h p1))
@@ -213,7 +214,7 @@
             (error "operand of improper type [~s]." p1))))
        (setf (get 'location ',op) ',location-op)))
   
-  (defMacro define-location-binary-predicate
+  (defmacro define-location-binary-predicate
             (op &aux (location-op (make-location-operator-name op)))
     `(progn
        (defgeneric ,location-op (location-1 location-2)
@@ -295,7 +296,7 @@
 
        (setf (get 'location ',op) ',location-op)))
   
-  (defMacro define-location-unary-predicate
+  (defmacro define-location-unary-predicate
             (op &aux (location-op (make-location-operator-name op)))
     `(progn
        (defun ,location-op (p1)
@@ -411,7 +412,7 @@
           (location-z r) (/ (location-z vec) D)))
   r)
 
-(defGeneric location-magnitude (location)
+(defgeneric location-magnitude (location)
   (:documentation "compute the magnitude of the location, taken as a vector.")
   
   #+ignore ;; standardized version
@@ -488,8 +489,10 @@
 			      (* (location-y vec1) (location-x vec2))))
   r)
 
+
 ;;;; --------------------------------------------------------------------------
 ;;;; min and max
+
 (defun location-minimum
     (c1 c2 &optional (r (make-location (type-of c1))))
   (setf (location-x r) (min (location-x c1) (location-x c2))
@@ -516,7 +519,7 @@
 ;;;; --------------------------------------------------------------------------
 ;;;; conversion functions
 
-(defMethod cartesian->spherical
+(defmethod cartesian->spherical
            ((c location-2) &optional (s (location-spherical))
             &aux (x2 (expt (location-x c) 2))
             (y2 (expt (location-y c) 2))
@@ -538,7 +541,7 @@
              (location-beta s) (atan (location-y c) xz))))
   s)
 
-(defMethod spherical->cartesian
+(defmethod spherical->cartesian
     ((s location-polar) &optional (c (make-location-world))
        &aux (xz-rad (* (location-radius s) (cos (location-beta s)))))
   (setf (location-x c) (* xz-rad (sin (location-alpha s)))
