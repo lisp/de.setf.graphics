@@ -34,6 +34,9 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
 The documentation is, unfortunately, to be found in the form of files intended for Word for Macintosh, Version 4.0, only.
 Until that improves, consult the [tests](./tests/) for examples.
 
+common-lisp.net hosts a mailing [list](http://www.common-lisp.net/mailman/listinfo/de-setf-graphics-devel)
+and a [trac](http://trac.common-lisp.net/de-setf-graphics/) instance for discussions and/or reports.
+
 Notes
 -----
 
@@ -55,6 +58,9 @@ exposes internal levels, it's not clear where this normalization should happen. 
 Downloading
 -----------
 
+Images are in the download area for
+[ccl](http://github.com/downloads/lisp/de.setf.graphics/ccl-graphics.image.tgz) and
+[sbcl](http://github.com/downloads/lisp/de.setf.graphics/sbcl-graphics.core.tgz) runtimes.
 
 Building
 ---------
