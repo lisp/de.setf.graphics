@@ -16,19 +16,22 @@ This library has been used for research, development, and prototyping.
 Over the years, it has been built and [probed](./tests/tests.asd) in the following combinations
 
 <table>
-<tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th></tr>
+<tr><td style='text-align: right;'>Graphics Interface<br/>lisp implementation</td><th>Core Graphics</th><th>xlib</th><th>Open GL</th><th>SVG</th></tr>
 <tr><th>MCL</th>
     <td> </td>
     <td>MCL-5.2, clx_0.4:<br/><a href='./readmes/mcl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-clx.png' width='64' height='64'/></a></td>
-    <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-opengl.png' width='64' height='64'/></a></td></tr>
+    <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-opengl.png' width='64' height='64'/></a></td>
+    <td>MCL-5.2, safari 4.03 <a href='./readmes/test-document.svg'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/test-document.svg' width='64' height='64'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.4, OS X 4.6, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
+    <td>CCL-1.3, OS X 4.6, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
+    <td> </td>
     <td> </td></tr>
 <tr><th>SBCL</th>
     <td/>
     <td>SBCL-1-0-35, OS X 4.6, clx_0.7.4:<br/><a href='./readmes/sbcl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/sbcl-clx.png' width='64' height='64'/></a></td>
-    <td></td></tr>
+    <td></td>
+    <td> </td></tr>
 </table>
 
 The documentation is, unfortunately, to be found in the form of files intended for Word for Macintosh, Version 4.0, only.
