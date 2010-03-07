@@ -22,10 +22,10 @@ Over the years, it has been built and [probed](./tests/tests.asd) in the followi
     <td>MCL-5.2, clx_0.4:<br/><a href='./readmes/mcl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-clx.png' width='64' height='64'/></a></td>
     <td>MCL-5.2, AGL-1.2.4:<br/><a href='./readmes/mcl-opengl.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/mcl-opengl.png' width='64' height='64'/></a></td>
     <td>MCL-5.2, safari 4.03:<br/>
-        <a href='./readmes/test-document.svg'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/test-document.svg' width='64' height='64'/></a></td></tr>
+        <a href='./readmes/test-document.svg'><object type='image/svg+html' data='http://github.com/lisp/de.setf.graphics/raw/master/readmes/test-document.svg' width='64' height='64'/></a></td></tr>
 <tr><th>CCL</th>
     <td/>
-    <td>CCL-1.3, OS X 4.6, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><object type='image/svg+html' data='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
+    <td>CCL-1.3, OS X 4.6, clx_0.7.3:<br/><a href='./readmes/ccl-clx.png'><img src='http://github.com/lisp/de.setf.graphics/raw/master/readmes/ccl-clx.png' width='64' height='64'/></a></td>
     <td> </td>
     <td> </td></tr>
 <tr><th>SBCL</th>
