@@ -218,10 +218,9 @@ as with a single general type.")
       (type-of (make-array 4 :initial-element 0.0s0 :element-type 'single-float)))
     (defvar *short-location-vector-element-type*
       (array-element-type (make-array 4 :initial-element 0.0s0 :element-type 'single-float)))
+    (defvar *fixnum-location-vector-element-type* 'fixnum)
     (defvar *fixnum-location-vector-type*
-      (type-of (make-array 4 :initial-element 0 :element-type '(signed-byte 32))))
-    (defvar *fixnum-location-vector-element-type*
-      (array-element-type (make-array 4 :initial-element 0 :element-type '(signed-byte 32))))
+      (type-of (make-array 4 :initial-element 0 :element-type 'fixnum)))
     (deftype location-vector ()
       "a (4) double float simple array intended to hold location coordinates."
       *location-vector-type*)
@@ -229,7 +228,7 @@ as with a single general type.")
       "a (4) short float simple array intended to hold location coordinates."
       *short-location-vector-type*)
     (deftype fixnum-location-vector ()
-      "a (4) (signed-byte 32) simple array intended to hold location coordinates."
+      "a (4) fixnum simple array intended to hold location coordinates."
       *fixnum-location-vector-type*)
     
     (defun location-vector-p (x)
@@ -263,7 +262,7 @@ as with a single general type.")
   (make-array 4  :element-type 'single-float :initial-element 0.0s0))
 
 (defun fixnum-location-vector ()
-  (make-array 4  :element-type '(signed-byte 32) :initial-element 0))
+  (make-array 4  :element-type 'fixnum :initial-element 0))
 
 (defmethod location-x ((location vector)) (the double-float (aref location 0)))
 (defmethod location-y ((location vector)) (the double-float (aref location 1)))
