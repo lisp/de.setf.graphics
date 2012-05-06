@@ -57,7 +57,10 @@
     :components ((:module "utility"
                   :pathname #p"LIBRARY:de;setf;utility;"
                   :components ((:file "lock")
-                               (:file "meta")))
+                               (:module "meta"
+                                        :serial t
+                                        :components ((:file "meta")
+                                                     (:file "float")))))
                  (:file "skippy"
                   :pathname "LIBRARY:com;xach;skippy.lisp")))
 

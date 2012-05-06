@@ -1783,7 +1783,6 @@ operation, the operation is ignored.</p>
 
 
 (defgeneric delegate-projection-task (task controller &rest args)
-  (declare (dynamic-extent args))
   (:documentation
    "run a context's projection task. this is either a reified task, in which case the context's controller queues it for
     later action, or it is a function, in which case it is run immediately.")
@@ -1801,7 +1800,6 @@ operation, the operation is ignored.</p>
     which, by default, queues a deferred draw operation.
     a context specialization may, alternatively, implement rendering as a directly executed
     method, or it may implement context-")
-  (declare (dynamic-extent args))
   (:method ((context projection-context) &rest args)
            (declare (dynamic-extent args))
            (apply #'delegate-projection-task
